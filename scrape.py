@@ -10,6 +10,7 @@ from sgrequests import SgRequests
 from sglogging import sglog
 from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
 import re
+from proxyfier import ProxyProviders
 
 
 def extract_json(html_string):
@@ -241,7 +242,7 @@ if __name__ == "__main__":
 
         try:
             with SgChrome(
-                response_successful=check_response, is_headless=False
+                response_successful=check_response, is_headless=False, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
             ) as driver:
                 if crawl_state.get_misc_value("got_last_ten"):
                     set_last_10()
