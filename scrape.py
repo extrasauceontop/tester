@@ -187,10 +187,7 @@ def scrape():
         deduper=SgRecordDeduper(
             SgRecordID(
                 {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.PAGE_URL,
-                    SgRecord.Headers.LOCATION_NAME,
+                    SgRecord.Headers.STORE_NUMBER
                 }
             ),
             duplicate_streak_failure_factor=100,
