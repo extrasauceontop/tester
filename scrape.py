@@ -41,6 +41,7 @@ def get_data():
     )
 
     for search_lat, search_lon in search:
+        search.found_nothing()
         url = (
             "https://www.hibbett.com/on/demandware.store/Sites-Hibbett-US-Site/default/Stores-GetNearestStores?latitude="
             + str(search_lat)
