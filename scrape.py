@@ -2,12 +2,11 @@ from sgselenium import SgChrome
 from sgscrape import simple_scraper_pipeline as sp
 import json
 from sgzip.dynamic import SearchableCountries, DynamicGeoSearch
+import html
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-import html
-from proxyfier import ProxyProviders
 
 
 def extract_json(html_string):
@@ -91,6 +90,7 @@ def get_data():
             hours = stores[store]["storeHours"].replace("|", " ").strip()
 
             address = html.unescape(address)
+            page_url = page_url.replace(" ", "")
 
             yield {
                 "locator_domain": locator_domain,
@@ -162,6 +162,5 @@ if __name__ == "__main__":
     with SgChrome(
         block_third_parties=False,
         response_successful=check_response,
-        proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
     ) as driver:
         scrape()
