@@ -38,9 +38,7 @@ def get_data():
     search = DynamicGeoSearch(
         expected_search_radius_miles=300, country_codes=[SearchableCountries.USA]
     )
-
     for search_lat, search_lon in search:
-        search.found_nothing()
         url = (
             "https://www.hibbett.com/on/demandware.store/Sites-Hibbett-US-Site/default/Stores-GetNearestStores?latitude="
             + str(search_lat)
@@ -148,14 +146,14 @@ def scrape():
 
 
 def check_response(response):  # noqa
-    info = driver.page_source
-    json_test = extract_json(info)
-    try:
-        json_test[0]["stores"]
-        return True
+        info = driver.page_source
+        json_test = extract_json(info)
+        try:
+            json_test[0]["stores"]
+            return True
 
-    except Exception:
-        return False
+        except Exception:
+            return False
 
 
 if __name__ == "__main__":
