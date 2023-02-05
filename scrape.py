@@ -1,111 +1,131 @@
-from sgselenium import SgChrome
-from sgscrape import simple_scraper_pipeline as sp
-import json
-from sgzip.dynamic import SearchableCountries, DynamicGeoSearch
-import html
+from sgrequests import SgRequests
+from bs4 import BeautifulSoup as bs
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
+from sgscrape import simple_scraper_pipeline as sp
+import html
+from proxyfier import ProxyProviders
 
 
-def extract_json(html_string):
-    json_objects = []
-    count = 0
+def get_token():
+    url = "https://www.tforcefreight.com/ltl/apps/ServiceCenterDirectory"
+    response = session.get(url).text
+    soup = bs(response, "html.parser")
 
-    brace_count = 0
-    for element in html_string:
+    token = soup.find("input", attrs={"name": "__RequestVerificationToken"})["value"]
+    return token
 
-        if element == "{":
-            brace_count = brace_count + 1
-            if brace_count == 1:
-                start = count
-
-        elif element == "}":
-            brace_count = brace_count - 1
-            if brace_count == 0:
-                end = count
-                try:
-                    json_objects.append(json.loads(html_string[start : end + 1]))
-                except Exception:
-                    pass
-        count = count + 1
-
-    return json_objects
-
+url = "https://www.tforcefreight.com/ltl/apps/ServiceCenterDirectory"
+base_location_url = "https://www.tforcefreight.com/ltl/apps/GetServiceCenterDetails"
 
 def get_data():
-    search = DynamicGeoSearch(
-        expected_search_radius_miles=300, country_codes=[SearchableCountries.USA]
-    )
-    for search_lat, search_lon in search:
-        url = (
-            "https://www.hibbett.com/on/demandware.store/Sites-Hibbett-US-Site/default/Stores-GetNearestStores?latitude="
-            + str(search_lat)
-            + "&longitude="
-            + str(search_lon)
-            + "&countryCode=US&distanceUnit=mi&maxdistance=250000000&social=false"
-        )
-        driver.get(url)
-        response = driver.page_source
+    page_urls = []
+    response = session.get(url).text
 
-        json_objects = extract_json(response)
-
-        stores = json_objects[0]["stores"]
-        for store in stores.keys():
-            locator_domain = "hibbett.com"
-            location_name = stores[store]["name"]
-            if "hibbett" in location_name.lower():
-                location_name = "Hibbett Sports"
-            address = stores[store]["address1"]
-            if len(stores[store]["address2"]) > 0:
-                address = address + ", " + stores[store]["address2"]
-            city = stores[store]["city"]
-            state = stores[store]["stateCode"]
-            zipp = stores[store]["postalCode"]
-            country_code = stores[store]["countryCode"]
-            page_url = (
-                "https://www.hibbett.com/storedetails/"
-                + state
-                + "/"
-                + city
-                + "/"
-                + stores[store]["id"]
-            )
-            phone = stores[store]["phone"]
-            store_number = stores[store]["id"]
-
-            location_type = "<MISSING>"
-            if stores[store]["isOpeningSoon"] is True:
-                location_type = "Opening Soon"
-
-            if stores[store]["temporarilyClosed"] is True:
-                location_type = "Temporarily Closed"
-
-            latitude = stores[store]["latitude"]
-            longitude = stores[store]["longitude"]
-            search.found_location_at(latitude, longitude)
-            hours = stores[store]["storeHours"].replace("|", " ").strip()
-
-            address = html.unescape(address)
-            page_url = page_url.replace(" ", "")
-
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": page_url,
-                "location_name": location_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": city,
-                "street_address": address,
-                "state": state,
-                "zip": zipp,
-                "store_number": store_number,
-                "phone": phone,
-                "location_type": location_type,
-                "hours": hours,
-                "country_code": country_code,
+    soup = bs(response, "html.parser")
+    select_tags = soup.find("div", attrs={"id": "divStateSCD"}).find_all("select")
+    country_state = {}
+    for select_tag in select_tags:
+        country = select_tag["name"][-2:]
+        states = [tag["value"] for tag in select_tag.find_all("option") if tag["value"] != ""]
+        country_state[country] = states
+    
+    countrys = country_state.keys()
+    for country_code in countrys:
+        
+        if country_code == "US":
+            search_country = "UNITED STATES"
+        elif country_code == "CA":
+            search_country = "CANADA"
+        elif country_code == "MX":
+            search_country = "MEXICO"
+        
+        for state in country_state[country_code]:
+            token = get_token()
+            data = {
+                "__RequestVerificationToken": token,
+                "scdCountry": search_country,
+                "zipcode": "",
+                "selectSCDStateUS": state,
+                "selectSCDStateCA": state,
+                "selectSCDStateMX": state,
+                "SCDZipcode": "",
             }
+
+            r = session.post(
+                "https://www.tforcefreight.com/ltl/apps/ServiceCenterDirectory",
+                data=data,
+            )
+
+            state_response = r.text
+            state_soup = bs(state_response, "html.parser")
+
+            locations = state_soup.find("div", attrs={"class": "service-centers-container"}).find("table").find("tbody").find_all("tr")
+            for location in locations:
+                try:
+                    zipp = location.find("input", attrs={"id": "ZipCode"})["value"]
+                except Exception:
+                    continue
+
+
+                page_url = base_location_url + "?zip=" + zipp + "&country=" + country_code
+                if page_url in page_urls:
+                    print(state)
+                    print(country_code)
+                    print(page_url)
+                    print("")
+                else:
+                    page_urls.append(page_url)
+
+
+                location_response_stuff = session.get(page_url)
+                if location_response_stuff.status_code >= 500:
+                    continue
+                location_response = html.unescape(location_response_stuff.text)
+                location_soup = bs(location_response, "html.parser")
+
+                locator_domain = "www.tforcefreight.com"
+                location_name = location_soup.find("p", attrs={"id": "shipDate"}).text.strip()
+                latitude = "<MISSING>"
+                longitude = "<MISSING>"
+                store_number = "<MISSING>"
+                location_type = "<MISSING>"
+                hours = "<MISSING>"
+                phone = "(800)333-7400"
+
+                trows = location_soup.find_all("tr")
+                address_row = "<MISSING>"
+                for trow in trows:
+                    if "mailing address" in trow.text.strip().lower():
+                        address_row = trow
+                        break
+                
+                if address_row == "<MISSING>":
+                    print(state)
+                    print(country_code)
+                    raise Exception
+                
+                address = address_row.find_all("td")[-1].find_all("p")[1].text.strip()
+                city = address_row.find_all("td")[-1].find_all("p")[-1].text.strip().split(", ")[0]
+
+                yield {
+                    "locator_domain": locator_domain,
+                    "page_url": page_url,
+                    "location_name": location_name,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "city": city,
+                    "street_address": address,
+                    "state": state,
+                    "zip": zipp,
+                    "store_number": store_number,
+                    "phone": phone,
+                    "location_type": location_type,
+                    "hours": hours,
+                    "country_code": country_code,
+                }
 
 
 def scrape():
@@ -132,7 +152,11 @@ def scrape():
 
     with SgWriter(
         deduper=SgRecordDeduper(
-            SgRecordID({SgRecord.Headers.STORE_NUMBER}),
+            SgRecordID(
+                {
+                    SgRecord.Headers.PAGE_URL,
+                }
+            ),
             duplicate_streak_failure_factor=100,
         )
     ) as writer:
@@ -145,20 +169,6 @@ def scrape():
         pipeline.run()
 
 
-def check_response(response):  # noqa
-        info = driver.page_source
-        json_test = extract_json(info)
-        try:
-            json_test[0]["stores"]
-            return True
-
-        except Exception:
-            return False
-
-
 if __name__ == "__main__":
-    with SgChrome(
-        block_third_parties=False,
-        response_successful=check_response,
-    ) as driver:
+    with SgRequests(proxy_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER, retries_with_fresh_proxy_ip=1) as session:
         scrape()
