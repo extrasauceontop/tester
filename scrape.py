@@ -72,10 +72,7 @@ def get_data():
 
                 page_url = base_location_url + "?zip=" + zipp + "&country=" + country_code
                 if page_url in page_urls:
-                    print(state)
-                    print(country_code)
-                    print(page_url)
-                    print("")
+                    continue
                 else:
                     page_urls.append(page_url)
 
@@ -90,10 +87,12 @@ def get_data():
                 location_soup = bs(location_response, "html.parser")
 
                 locator_domain = "www.tforcefreight.com"
-                location_name = location_soup.find("p", attrs={"id": "shipDate"}).text.strip()
+                location_name = location.find("td").text.strip()
+                store_number = location.find("td", attrs={"class": "abbrvData"}).find("p").text.strip()
+                
+
                 latitude = "<MISSING>"
                 longitude = "<MISSING>"
-                store_number = "<MISSING>"
                 location_type = "<MISSING>"
                 hours = "<MISSING>"
                 phone = "(800)333-7400"
