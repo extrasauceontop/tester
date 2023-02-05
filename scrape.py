@@ -90,10 +90,10 @@ def get_data():
                 try:
                     if location_response_stuff.status_code >= 500:
                         successful = "no"
-                        continue
+
                 except Exception:
                     successful = "no"
-                    continue
+
 
                 if successful == "yes":
                     location_response = html.unescape(location_response_stuff.text)
