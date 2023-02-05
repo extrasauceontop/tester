@@ -64,12 +64,21 @@ def get_data():
 
             locations = state_soup.find("div", attrs={"class": "service-centers-container"}).find("table").find("tbody").find_all("tr")
             for location in locations:
+                locator_domain = "www.tforcefreight.com"
+                latitude = "<MISSING>"
+                longitude = "<MISSING>"
+                location_type = "<MISSING>"
+                hours = "<MISSING>"
+                phone = "(800)333-7400"
+                successful = "yes"
+
                 try:
                     zipp = location.find("input", attrs={"id": "ZipCode"})["value"]
                 except Exception:
                     continue
 
-
+                location_name = location.find("td").text.strip()
+                store_number = location.find("td", attrs={"class": "abbrvData"}).find("p").text.strip()
                 page_url = base_location_url + "?zip=" + zipp + "&country=" + country_code
                 if page_url in page_urls:
                     continue
@@ -80,37 +89,34 @@ def get_data():
                 location_response_stuff = session.get(page_url)
                 try:
                     if location_response_stuff.status_code >= 500:
+                        successful = "no"
                         continue
                 except Exception:
+                    successful = "no"
                     continue
-                location_response = html.unescape(location_response_stuff.text)
-                location_soup = bs(location_response, "html.parser")
 
-                locator_domain = "www.tforcefreight.com"
-                location_name = location.find("td").text.strip()
-                store_number = location.find("td", attrs={"class": "abbrvData"}).find("p").text.strip()
-                
+                if successful == "yes":
+                    location_response = html.unescape(location_response_stuff.text)
+                    location_soup = bs(location_response, "html.parser")
 
-                latitude = "<MISSING>"
-                longitude = "<MISSING>"
-                location_type = "<MISSING>"
-                hours = "<MISSING>"
-                phone = "(800)333-7400"
-
-                trows = location_soup.find_all("tr")
-                address_row = "<MISSING>"
-                for trow in trows:
-                    if "mailing address" in trow.text.strip().lower():
-                        address_row = trow
-                        break
+                    trows = location_soup.find_all("tr")
+                    address_row = "<MISSING>"
+                    for trow in trows:
+                        if "mailing address" in trow.text.strip().lower():
+                            address_row = trow
+                            break
+                    
+                    if address_row == "<MISSING>":
+                        print(state)
+                        print(country_code)
+                        raise Exception
+                    
+                    address = address_row.find_all("td")[-1].find_all("p")[1].text.strip()
+                    city = address_row.find_all("td")[-1].find_all("p")[-1].text.strip().split(", ")[0]
                 
-                if address_row == "<MISSING>":
-                    print(state)
-                    print(country_code)
-                    raise Exception
-                
-                address = address_row.find_all("td")[-1].find_all("p")[1].text.strip()
-                city = address_row.find_all("td")[-1].find_all("p")[-1].text.strip().split(", ")[0]
+                else:
+                    address = "<MISSING>"
+                    city = location_name.split(", ")[0]
 
                 yield {
                     "locator_domain": locator_domain,
