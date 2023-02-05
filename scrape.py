@@ -81,7 +81,10 @@ def get_data():
 
 
                 location_response_stuff = session.get(page_url)
-                if location_response_stuff.status_code >= 500:
+                try:
+                    if location_response_stuff.status_code >= 500:
+                        continue
+                except Exception:
                     continue
                 location_response = html.unescape(location_response_stuff.text)
                 location_soup = bs(location_response, "html.parser")
