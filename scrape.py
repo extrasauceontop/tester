@@ -1,139 +1,123 @@
 from sgrequests import SgRequests
-from bs4 import BeautifulSoup as bs
+from sgselenium import SgChrome
+import json
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
 from sgscrape import simple_scraper_pipeline as sp
+from sgzip.dynamic import DynamicZipSearch, SearchableCountries
+from bs4 import BeautifulSoup as bs
 import html
-from proxyfier import ProxyProviders
+from selenium.webdriver.common.by import By
 
 
-def get_token():
-    url = "https://www.tforcefreight.com/ltl/apps/ServiceCenterDirectory"
-    response = session.get(url).text
-    soup = bs(response, "html.parser")
+def extract_json(html_string):
+    json_objects = []
+    count = 0
 
-    token = soup.find("input", attrs={"name": "__RequestVerificationToken"})["value"]
-    return token
+    brace_count = 0
+    for element in html_string:
 
-url = "https://www.tforcefreight.com/ltl/apps/ServiceCenterDirectory"
-base_location_url = "https://www.tforcefreight.com/ltl/apps/GetServiceCenterDetails"
+        if element == "{":
+            brace_count = brace_count + 1
+            if brace_count == 1:
+                start = count
+
+        elif element == "}":
+            brace_count = brace_count - 1
+            if brace_count == 0:
+                end = count
+                try:
+                    json_objects.append(json.loads(html_string[start : end + 1]))
+                except Exception:
+                    pass
+        count = count + 1
+
+    return json_objects
+
+
+def get_viewstate():
+    url = "https://www.centerformedicalweightloss.com/"
+    with SgChrome() as driver:
+
+        driver.get(url)
+        driver.find_element(
+            By.ID,
+            "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_txtZC",
+        ).send_keys("35216")
+        driver.find_element(
+            By.ID,
+            "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_ibtnFind",
+        ).click()
+
+        soup = bs(driver.page_source, "html.parser")
+        viewstate = (
+            soup.find("input", attrs={"id": "__VIEWSTATE"})["value"]
+            .replace("/", "%2F")
+            .replace("=", "%3D")
+            .replace("+", "%2B")
+        )
+        return viewstate
+
 
 def get_data():
-    page_urls = []
-    response = session.get(url).text
+    url = "https://centerformedicalweightloss.com/find_a_center.aspx"
+    search = DynamicZipSearch(
+        country_codes=[SearchableCountries.USA], expected_search_radius_miles=20
+    )
 
-    soup = bs(response, "html.parser")
-    select_tags = soup.find("div", attrs={"id": "divStateSCD"}).find_all("select")
-    country_state = {}
-    for select_tag in select_tags:
-        country = select_tag["name"][-2:]
-        states = [tag["value"] for tag in select_tag.find_all("option") if tag["value"] != ""]
-        country_state[country] = states
-    
-    countrys = country_state.keys()
-    for country_code in countrys:
-        
-        if country_code == "US":
-            search_country = "UNITED STATES"
-        elif country_code == "CA":
-            search_country = "CANADA"
-        elif country_code == "MX":
-            search_country = "MEXICO"
-        
-        for state in country_state[country_code]:
-            token = get_token()
-            data = {
-                "__RequestVerificationToken": token,
-                "scdCountry": search_country,
-                "zipcode": "",
-                "selectSCDStateUS": state,
-                "selectSCDStateCA": state,
-                "selectSCDStateMX": state,
-                "SCDZipcode": "",
-            }
+    viewstate = html.escape(get_viewstate())
+    for search_code in search:
+        search.found_nothing()
+        payload = (
+            "__VIEWSTATE="
+            + viewstate
+            + "&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24zipCodeInputAdv=&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24nameInput=&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24HtmlHiddenField=ZipSearch&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24milesInput=50&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24zipCodeInput="
+            + str(search_code)
+            + "&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24btnSubmit.x=120&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24btnSubmit.y=16&defaultMiles=50&__VIEWSTATEGENERATOR=CA0B0334&__EVENTTARGET=&__EVENTARGUMENT="
+        )
 
-            r = session.post(
-                "https://www.tforcefreight.com/ltl/apps/ServiceCenterDirectory",
-                data=data,
+        response_stuff = session.post(url, data=payload, headers=headers)
+        response = response_stuff.text
+
+        json_objects = extract_json(response.split("centersData=")[1])
+
+        for location in json_objects:
+            locator_domain = "centerformedicalweightloss.com"
+            page_url = (
+                "https://centerformedicalweightloss.com/doctors?url="
+                + location["urlslug"]
             )
+            location_name = location["name"]
+            latitude = location["latitude"]
+            longitude = location["longitude"]
+            city = location["city"]
+            address = (location["address1"] + " " + location["address2"]).strip()
+            state = location["state"]
+            zipp = location["zip"].split("-")[0]
+            store_number = "<MISSING>"
+            phone = location["tollfree"]
+            location_type = "<MISSING>"
+            hours = "<MISSING>"
+            country_code = "US"
 
-            state_response = r.text
-            state_soup = bs(state_response, "html.parser")
-
-            locations = state_soup.find("div", attrs={"class": "service-centers-container"}).find("table").find("tbody").find_all("tr")
-            for location in locations:
-                locator_domain = "www.tforcefreight.com"
-                latitude = "<MISSING>"
-                longitude = "<MISSING>"
-                location_type = "<MISSING>"
-                hours = "<MISSING>"
-                phone = "(800)333-7400"
-                successful = "yes"
-
-                try:
-                    zipp = location.find("input", attrs={"id": "ZipCode"})["value"]
-                except Exception:
-                    continue
-
-                location_name = location.find("td").text.strip()
-                store_number = location.find("td", attrs={"class": "abbrvData"}).find("p").text.strip()
-                page_url = base_location_url + "?zip=" + zipp + "&country=" + country_code
-                if page_url in page_urls:
-                    continue
-                else:
-                    page_urls.append(page_url)
-
-
-                location_response_stuff = session.get(page_url)
-                try:
-                    if location_response_stuff.status_code >= 500:
-                        successful = "no"
-
-                except Exception:
-                    successful = "no"
-
-
-                if successful == "yes":
-                    location_response = html.unescape(location_response_stuff.text)
-                    location_soup = bs(location_response, "html.parser")
-
-                    trows = location_soup.find_all("tr")
-                    address_row = "<MISSING>"
-                    for trow in trows:
-                        if "mailing address" in trow.text.strip().lower():
-                            address_row = trow
-                            break
-                    
-                    if address_row == "<MISSING>":
-                        print(state)
-                        print(country_code)
-                        raise Exception
-                    
-                    address = address_row.find_all("td")[-1].find_all("p")[1].text.strip()
-                    city = address_row.find_all("td")[-1].find_all("p")[-1].text.strip().split(", ")[0]
-                
-                else:
-                    address = "<MISSING>"
-                    city = location_name.split(", ")[0]
-
-                yield {
-                    "locator_domain": locator_domain,
-                    "page_url": page_url,
-                    "location_name": location_name,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "city": city,
-                    "street_address": address,
-                    "state": state,
-                    "zip": zipp,
-                    "store_number": store_number,
-                    "phone": phone,
-                    "location_type": location_type,
-                    "hours": hours,
-                    "country_code": country_code,
-                }
+            yield {
+                "locator_domain": locator_domain,
+                "page_url": page_url,
+                "location_name": location_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "city": city,
+                "street_address": address,
+                "state": state,
+                "zip": zipp,
+                "store_number": store_number,
+                "phone": phone,
+                "location_type": location_type,
+                "hours": hours,
+                "country_code": country_code,
+            }
 
 
 def scrape():
@@ -162,7 +146,10 @@ def scrape():
         deduper=SgRecordDeduper(
             SgRecordID(
                 {
+                    SgRecord.Headers.LATITUDE,
+                    SgRecord.Headers.LONGITUDE,
                     SgRecord.Headers.PAGE_URL,
+                    SgRecord.Headers.LOCATION_NAME,
                 }
             ),
             duplicate_streak_failure_factor=100,
@@ -178,5 +165,9 @@ def scrape():
 
 
 if __name__ == "__main__":
-    with SgRequests(proxy_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER, retries_with_fresh_proxy_ip=1) as session:
+    with SgRequests() as session:
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36",
+        }
         scrape()
