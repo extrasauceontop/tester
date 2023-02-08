@@ -1,5 +1,5 @@
 from sgrequests import SgRequests
-from sgselenium import SgChrome
+from sgselenium import SgFirefox
 import json
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
@@ -39,17 +39,11 @@ def extract_json(html_string):
 
 def get_viewstate():
     url = "https://www.centerformedicalweightloss.com/"
-    with SgChrome() as driver:
+    with SgFirefox() as driver:
 
         driver.get(url)
-        driver.find_element(
-            By.ID,
-            "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_txtZC",
-        ).send_keys("35216")
-        driver.find_element(
-            By.ID,
-            "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_ibtnFind",
-        ).click()
+        driver.find_element(By.ID, "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_txtZC").send_keys("35216")
+        driver.find_element(By.ID, "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_ibtnFind").click()
 
         soup = bs(driver.page_source, "html.parser")
         viewstate = (
