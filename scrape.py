@@ -1,15 +1,15 @@
-from sgrequests import SgRequests
-from sgselenium import SgFirefox
+from sgselenium import SgChrome
 import json
+from sgscrape import simple_scraper_pipeline as sp
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-from sgscrape import simple_scraper_pipeline as sp
-from sgzip.dynamic import DynamicZipSearch, SearchableCountries
 from bs4 import BeautifulSoup as bs
-import html
-from selenium.webdriver.common.by import By
+from sgrequests import SgRequests
+from sglogging import sglog
+from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
+import re
 
 
 def extract_json(html_string):
@@ -37,84 +37,130 @@ def extract_json(html_string):
     return json_objects
 
 
-def get_viewstate():
-    url = "https://www.centerformedicalweightloss.com/"
-    with SgFirefox() as driver:
+def set_last_10():
+    recent_locs = crawl_state.get_misc_value("recent_locs")
+    for url_to_push in recent_locs:
+        crawl_state.push_request(SerializableRequest(url=url_to_push))
 
-        driver.get(url)
-        driver.find_element(By.ID, "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_txtZC").send_keys("35216")
-        driver.find_element(By.ID, "ctl00_ctl00_ctl00_ContentPlaceHolderDefault_ContentBody_us_FAC_ibtnFind").click()
 
-        soup = bs(driver.page_source, "html.parser")
-        viewstate = (
-            soup.find("input", attrs={"id": "__VIEWSTATE"})["value"]
-            .replace("/", "%2F")
-            .replace("=", "%3D")
-            .replace("+", "%2B")
-        )
-        return viewstate
+def get_urls():
+    tot_urls = []
+    url = "https://www.sixt.com/mount/xml-sitemaps/branches.xml"
+    headers = {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
+    }
+
+    with SgRequests() as session:
+        r = session.get(url, headers=headers)
+    soup = bs(r.text, "xml")
+    loclist = soup.findAll("loc")
+    for item in loclist:
+        url_to_push = item.text.strip()
+        log.info("Pushing URL: " + url_to_push)
+        tot_urls.append(url_to_push)
+        crawl_state.push_request(SerializableRequest(url=url_to_push))
+    log.info("Total URLs to scrape: " + str(len(tot_urls)))
+    crawl_state.set_misc_value("got_urls", True)
 
 
 def get_data():
-    url = "https://centerformedicalweightloss.com/find_a_center.aspx"
-    search = DynamicZipSearch(
-        country_codes=[SearchableCountries.USA], expected_search_radius_miles=20
-    )
+    most_recent_locs = []
+    for page_url_thing in crawl_state.request_stack_iter():
+        log.info("new record")
+        log.info(page_url_thing)
+        page_url = page_url_thing.url
+        most_recent_locs.append(page_url)
+        if len(most_recent_locs) > 10:
+            most_recent_locs = most_recent_locs[-10:]
+            crawl_state.set_misc_value("got_last_ten", True)
+            crawl_state.set_misc_value("recent_locs", most_recent_locs)
+        log.info(page_url)
+        driver.get(page_url)
+        response = driver.page_source
+        if "THIS PAGE DOESN'T EXIST OR WAS REMOVED" in response:
+            continue
 
-    viewstate = html.escape(get_viewstate())
-    for search_code in search:
-        search.found_nothing()
-        payload = (
-            "__VIEWSTATE="
-            + viewstate
-            + "&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24zipCodeInputAdv=&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24nameInput=&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24HtmlHiddenField=ZipSearch&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24milesInput=50&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24zipCodeInput="
-            + str(search_code)
-            + "&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24btnSubmit.x=120&ctl00%24ctl00%24ctl00%24ContentPlaceHolderDefault%24ContentBody%24Find_A_Center%24btnSubmit.y=16&defaultMiles=50&__VIEWSTATEGENERATOR=CA0B0334&__EVENTTARGET=&__EVENTARGUMENT="
+        location_soup = bs(response, "html.parser")
+        try:
+            data_id = (
+                "S_" + location_soup.find("meta", attrs={"name": "branchid"})["content"]
+            )
+
+        except Exception:
+            try:
+                data_id = (
+                    "S_"
+                    + location_soup.find("meta", attrs={"name": "branch"})["content"]
+                )
+            except Exception:
+                continue
+        data_url = "https://web-api.orange.sixt.com/v1/locations/" + data_id
+        log.info(data_url)
+        driver.get(data_url)
+        data_response = driver.page_source
+        try:
+            json_loc = extract_json(data_response)[0]
+        except Exception:
+            crawl_state.push_request(SerializableRequest(url=page_url))
+            raise Exception
+        locator_domain = "www.sixt.com"
+        location_name = json_loc["title"]
+        latitude = str(round(float(json_loc["coordinates"]["latitude"]), 2))
+        longitude = str(round(float(json_loc["coordinates"]["longitude"]), 2))
+        city = json_loc["address"]["city"]
+        address = json_loc["address"]["street"]
+        state = "<MISSING>"
+        zipp = json_loc["address"]["postcode"]
+        store_number = data_id
+        location_type = "<MISSING>"
+        temp = json_loc["stationInformation"]
+        phone = temp["contact"]["telephone"]
+        hours_parts = temp["openingHours"]["days"]
+        hours = ""
+        for day in days:
+            try:
+                start = hours_parts[day]["openings"][0]["open"]
+                end = hours_parts[day]["openings"][0]["close"]
+                hours = hours + day + " " + start + "-" + end + ", "
+
+            except Exception:
+                hours = hours + day + " CLOSED, "
+
+        hours = hours[:-2]
+        country_code = page_url.split("car-rental/")[1].split("/")[0]
+        hours = hours.replace("24-hour return,", "").replace(
+            "24-HOUR RETURN ON REQUEST,", ""
         )
 
-        response_stuff = session.post(url, data=payload, headers=headers)
-        response = response_stuff.text
+        raw_address = address + ", " + city + ", " + zipp
 
-        json_objects = extract_json(response.split("centersData=")[1])
+        address_test = address.split(", ")[-1]
+        if re.search(r"\d", address_test) is False:
+            address = "".join(part + " " for part in address.split(", ")[-1])
 
-        for location in json_objects:
-            locator_domain = "centerformedicalweightloss.com"
-            page_url = (
-                "https://centerformedicalweightloss.com/doctors?url="
-                + location["urlslug"]
-            )
-            location_name = location["name"]
-            latitude = location["latitude"]
-            longitude = location["longitude"]
-            city = location["city"]
-            address = (location["address1"] + " " + location["address2"]).strip()
-            state = location["state"]
-            zipp = location["zip"].split("-")[0]
-            store_number = "<MISSING>"
-            phone = location["tollfree"]
-            location_type = "<MISSING>"
-            hours = "<MISSING>"
-            country_code = "US"
-
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": page_url,
-                "location_name": location_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": city,
-                "street_address": address,
-                "state": state,
-                "zip": zipp,
-                "store_number": store_number,
-                "phone": phone,
-                "location_type": location_type,
-                "hours": hours,
-                "country_code": country_code,
-            }
+        yield {
+            "locator_domain": locator_domain,
+            "page_url": page_url,
+            "location_name": location_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "city": city,
+            "street_address": address,
+            "state": state,
+            "zip": zipp,
+            "store_number": store_number,
+            "phone": phone,
+            "location_type": location_type,
+            "hours": hours,
+            "country_code": country_code,
+            "raw_address": raw_address,
+        }
 
 
 def scrape():
+    if not crawl_state.get_misc_value("got_urls"):
+        get_urls()
+
     field_defs = sp.SimpleScraperPipeline.field_definitions(
         locator_domain=sp.MappingField(mapping=["locator_domain"]),
         page_url=sp.MappingField(mapping=["page_url"]),
@@ -134,18 +180,12 @@ def scrape():
         store_number=sp.MappingField(mapping=["store_number"]),
         hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
         location_type=sp.MappingField(mapping=["location_type"], is_required=False),
+        raw_address=sp.MappingField(mapping=["raw_address"], is_required=False),
     )
 
     with SgWriter(
         deduper=SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.PAGE_URL,
-                    SgRecord.Headers.LOCATION_NAME,
-                }
-            ),
+            SgRecordID({SgRecord.Headers.LATITUDE, SgRecord.Headers.LONGITUDE}),
             duplicate_streak_failure_factor=100,
         )
     ) as writer:
@@ -158,10 +198,54 @@ def scrape():
         pipeline.run()
 
 
+def check_response(dresponse):  # noqa
+    if "S_" in driver.current_url:
+        return True
+    response = driver.page_source
+    if "THIS PAGE DOESN'T EXIST OR WAS REMOVED" in response:
+        return True
+    location_soup = bs(response, "html.parser")
+    try:
+        ("S_" + location_soup.find("meta", attrs={"name": "branchid"})["content"])
+        return True
+
+    except Exception:
+        try:
+            ("S_" + location_soup.find("meta", attrs={"name": "branch"})["content"])
+            return True
+        except Exception:
+            return False
+
+
 if __name__ == "__main__":
-    with SgRequests() as session:
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36",
-        }
-        scrape()
+    log = sglog.SgLogSetup().get_logger(logger_name="findchurch")
+    days = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ]
+    fail_check = 0
+    crawl_state = CrawlStateSingleton.get_instance()
+    while True:
+        fail_check = fail_check + 1
+        if fail_check == 10:
+            raise Exception
+
+        try:
+            with SgChrome(
+                response_successful=check_response,
+                is_headless=False,
+            ) as driver:
+                if crawl_state.get_misc_value("got_last_ten"):
+                    set_last_10()
+                scrape()
+
+            break
+
+        except Exception as e:
+            log.info(e)
+            continue
