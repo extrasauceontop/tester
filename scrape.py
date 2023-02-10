@@ -9,7 +9,7 @@ from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-
+from proxyfier import ProxyProviders
 
 def get_data():
     def check_response(dresponse):  # noqa
@@ -31,6 +31,7 @@ def get_data():
         block_third_parties=False,
         page_meets_expectations=check_response,
         is_headless=False,
+        proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
     ) as driver:
         begun = 0
         driver.get(url)
