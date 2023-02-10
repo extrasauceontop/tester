@@ -1,14 +1,14 @@
+from sgselenium import SgChromeWithoutSeleniumWire
 from bs4 import BeautifulSoup as bs
+from sgscrape import simple_scraper_pipeline as sp
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from sgselenium.sgselenium import SgChromeWithoutSeleniumWire
+import time
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-import time
-from sgscrape import simple_scraper_pipeline as sp
 
 
 def get_data():
@@ -26,7 +26,7 @@ def get_data():
                 return True
             return False
 
-    url = "https://www.savemart.com/stores/"
+    url = "https://www.luckysupermarkets.com/stores/"
     with SgChromeWithoutSeleniumWire(
         block_third_parties=False,
         page_meets_expectations=check_response,
@@ -36,15 +36,16 @@ def get_data():
         driver.get(url)
         time.sleep(6)
         driver.get(url)
+        response = driver.page_source
 
-        soup = bs(driver.page_source, "html.parser")
+        soup = bs(response, "html.parser")
         grids = soup.find("div", class_="store-list__scroll-container").find_all("li")
         begun = 1
         for grid in grids:
             name = grid.find("span", attrs={"class": "name"}).text.strip()
             number = grid.find("span", attrs={"class": "number"}).text.strip()
             page_url = (
-                "https://www.savemart.com/stores/"
+                "https://www.luckysupermarkets.com/stores/"
                 + name.split("\n")[0].replace(" ", "-").replace(".", "").lower()
                 + "-"
                 + number.split("\n")[0].split("#")[-1]
@@ -70,7 +71,7 @@ def get_data():
 
             location_soup = bs(driver.page_source, "html.parser")
 
-            locator_domain = "savemart.com"
+            locator_domain = "luckysupermarkets.com"
             location_name = location_soup.find("meta", attrs={"property": "og:title"})[
                 "content"
             ]
