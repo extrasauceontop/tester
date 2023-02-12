@@ -11,6 +11,7 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
 from proxyfier import ProxyProviders
 
+
 def get_data():
     def check_response(dresponse):  # noqa
         try:
