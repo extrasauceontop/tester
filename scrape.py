@@ -1,15 +1,14 @@
-from sgselenium import SgChromeWithoutSeleniumWire
 from bs4 import BeautifulSoup as bs
-from sgscrape import simple_scraper_pipeline as sp
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
+from sgselenium.sgselenium import SgChromeWithoutSeleniumWire
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-from proxyfier import ProxyProviders
+import time
+from sgscrape import simple_scraper_pipeline as sp
 
 
 def get_data():
@@ -27,27 +26,25 @@ def get_data():
                 return True
             return False
 
-    url = "https://www.luckysupermarkets.com/stores/"
+    url = "https://www.savemart.com/stores/"
     with SgChromeWithoutSeleniumWire(
         block_third_parties=False,
         page_meets_expectations=check_response,
         is_headless=False,
-        proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
     ) as driver:
         begun = 0
         driver.get(url)
         time.sleep(6)
         driver.get(url)
-        response = driver.page_source
 
-        soup = bs(response, "html.parser")
+        soup = bs(driver.page_source, "html.parser")
         grids = soup.find("div", class_="store-list__scroll-container").find_all("li")
         begun = 1
         for grid in grids:
             name = grid.find("span", attrs={"class": "name"}).text.strip()
             number = grid.find("span", attrs={"class": "number"}).text.strip()
             page_url = (
-                "https://www.luckysupermarkets.com/stores/"
+                "https://www.savemart.com/stores/"
                 + name.split("\n")[0].replace(" ", "-").replace(".", "").lower()
                 + "-"
                 + number.split("\n")[0].split("#")[-1]
@@ -73,7 +70,7 @@ def get_data():
 
             location_soup = bs(driver.page_source, "html.parser")
 
-            locator_domain = "luckysupermarkets.com"
+            locator_domain = "savemart.com"
             location_name = location_soup.find("meta", attrs={"property": "og:title"})[
                 "content"
             ]
