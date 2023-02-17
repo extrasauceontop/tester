@@ -1,182 +1,217 @@
-from bs4 import BeautifulSoup as bs
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from sgselenium.sgselenium import SgChromeWithoutSeleniumWire
-from sgscrape.sgrecord_deduper import SgRecordDeduper
+import json
+from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
+from concurrent import futures
+from datetime import timedelta
+from lxml import html
+from sglogging import sglog
 from sgscrape.sgrecord import SgRecord
+from sgrequests import SgRequests
 from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord_id import SgRecordID
-import time
-from sgscrape import simple_scraper_pipeline as sp
+from sgscrape.sgrecord_deduper import SgRecordDeduper
+from sgscrape.sgrecord_id import RecommendedRecordIds
+from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
 
 
-def get_data():
-    def check_response(dresponse):  # noqa
+def get_params():
+    api = "https://www.versace.com/international/en/find-a-store/"
+    r = session.get(api, headers=headers)
+    tree = html.fromstring(r.text)
+
+    cookie = r.cookies.get("dwsid")
+    token = "".join(tree.xpath("//form[@id='dwfrm_storelocator']/@action")).split("=")[
+        -1
+    ]
+    selector = {}
+
+    options = tree.xpath(
+        "//select[@id='dwfrm_storelocator_countryCode']/option[@class]"
+    )
+    for o in options:
+        cc = "".join(o.xpath("./@value"))
+        selector[cc] = "".join(o.xpath("./text()")).strip()
+
+    return cookie, token, selector
+
+
+def get_urls():
+    api = "https://www.versace.com/international/en/find-a-store/"
+    cookie, token, selector = get_params()
+    params = {
+        "dwcont": token,
+        "dwfrm_storelocator_findbycountry": "ok",
+    }
+    cookies = {
+        "dwsid": cookie,
+    }
+
+    for cc, adr in selector.items():
+        if cc == "CN":
+            continue
+
+        data = {
+            "address": adr,
+            "format": "ajax",
+            "country": cc,
+        }
+
+        r = session.post(
+            api, headers=headers, params=params, data=data, cookies=cookies
+        )
+        tree = html.fromstring(r.content)
+        urls = tree.xpath(
+            "//ol[contains(@class, 'storelocator-results')]//a[@class='js-store-link']/@href"
+        )
+        for url in urls:
+            crawl_state.push_request(SerializableRequest(url=url))
+
+    params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
+    search = DynamicGeoSearch(
+        country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=10
+    )
+    for search_lat, search_lon in search:
+        test_lat = 39.904211
+        test_lon = 116.407395
+        data = {
+            "format": "ajax",
+            "latitude": str(test_lat),
+            "longitude": str(test_lon),
+            "country": "CN",
+        }
+        r = session.post(
+            api, headers=headers, params=params, data=data, cookies=cookies
+        )
+
+        if not r.status_code:
+            log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
+            search.found_nothing()
+            continue
+        if r.status_code >= 400:
+            log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
+            search.found_nothing()
+            continue
+
+        tree = html.fromstring(r.content)
+        sources = tree.xpath("//div/@data-marker-info")
+        log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
+        if not sources:
+            search.found_nothing()
+            continue
+
+        for source in sources:
+            j = json.loads(source)
+            lat = j.get("latitude")
+            lng = j.get("longitude")
+            search.found_location_at(lat, lng)
+
+        for url in tree.xpath(
+            "//ol[contains(@class, 'storelocator-results')]//a[@class='js-store-link']/@href"
+        ):
+            log.info(url)
+            crawl_state.push_request(SerializableRequest(url=url))
+        return
+    crawl_state.set_misc_value("got_urls", True)
+
+
+def get_data(url_thing):
+    page_url = url_thing.url
+    r = session.get(page_url, headers=headers)
+    if r.status_code >= 400:
+        log.error(f"{page_url} skipped b/c status code is {r.status_code}")
+        return
+
+    log.info(f"{page_url}: {r}")
+    tree = html.fromstring(r.text)
+    text = "".join(tree.xpath("//script[contains(text(), 'GeoCoordinates')]/text()"))
+    try:
+        j = json.loads(text, strict=False)
+    except:
+        log.error(f"{page_url}: ERROR!!!!!!!!")
+        return
+
+    a = j.get("address") or {}
+    location_name = j.get("name")
+    street_address = a.get("streetAddress") or ""
+    if street_address.endswith(","):
+        street_address = street_address[:-1]
+
+    city = a.get("addressLocality") or ""
+    state = a.get("addressRegion")
+    postal = a.get("postalCode") or ""
+    country = a.get("addressCountry")
+
+    if f" {city} " in street_address and postal in street_address:
+        street_address = street_address.split(f" {city} ")
+
+    phone = j.get("telephone")
+    store_number = page_url.split("=")[-1]
+    location_type = ",".join(set(tree.xpath("//div[@class='store-types']/p/text()")))
+
+    g = j.get("geo") or {}
+    latitude = g.get("latitude")
+    longitude = g.get("longitude")
+    if latitude == longitude:
         try:
-            response = driver.page_source
-            soup = bs(response, "html.parser")
-            soup.find("div", class_="store-list__scroll-container").find_all("li")
-            return True
+            source = "".join(tree.xpath("//div/@data-marker-info"))
+            g = json.loads(source)
+            latitude = g.get("latitude")
+            longitude = g.get("longitude")
+        except:
+            latitude = longitude = SgRecord.MISSING
 
-        except Exception:
-            if begun == 0:
-                pass
-            elif begun == 1:
-                return True
-            return False
+    hours = tree.xpath("//div[@class='store-hours']/p/span/text()")
+    hours = list(filter(None, [h.strip() for h in hours]))
+    hours_of_operation = ";".join(hours)
 
-    url = "https://www.savemart.com/stores/"
-    with SgChromeWithoutSeleniumWire(
-        block_third_parties=False,
-        page_meets_expectations=check_response,
-        is_headless=False,
-    ) as driver:
-        begun = 0
-        driver.get(url)
-        time.sleep(6)
-        driver.get(url)
-
-        soup = bs(driver.page_source, "html.parser")
-        grids = soup.find("div", class_="store-list__scroll-container").find_all("li")
-        begun = 1
-        for grid in grids:
-            name = grid.find("span", attrs={"class": "name"}).text.strip()
-            number = grid.find("span", attrs={"class": "number"}).text.strip()
-            page_url = (
-                "https://www.savemart.com/stores/"
-                + name.split("\n")[0].replace(" ", "-").replace(".", "").lower()
-                + "-"
-                + number.split("\n")[0].split("#")[-1]
-                + "/"
-                + grid["id"].split("-")[-1]
-            )
-
-            x = 0
-            while True:
-                x = x + 1
-                if x == 10:
-                    raise Exception
-                try:
-                    driver.get(page_url)
-                    WebDriverWait(driver, 20).until(
-                        EC.presence_of_element_located(
-                            (By.CLASS_NAME, "store-details-store-hours__content")
-                        )
-                    )
-                    break
-                except Exception:
-                    continue
-
-            location_soup = bs(driver.page_source, "html.parser")
-
-            locator_domain = "savemart.com"
-            location_name = location_soup.find("meta", attrs={"property": "og:title"})[
-                "content"
-            ]
-            address = location_soup.find(
-                "meta", attrs={"property": "og:street-address"}
-            )["content"]
-            city = location_soup.find("meta", attrs={"property": "og:locality"})[
-                "content"
-            ]
-            state = location_soup.find("meta", attrs={"property": "og:region"})[
-                "content"
-            ]
-            zipp = location_soup.find("meta", attrs={"property": "og:postal-code"})[
-                "content"
-            ]
-            country_code = location_soup.find(
-                "meta", attrs={"property": "og:country-name"}
-            )["content"]
-            store_number = location_name.split("#")[-1]
-            phone = location_soup.find("meta", attrs={"property": "og:phone_number"})[
-                "content"
-            ]
-            location_type = "<MISSING>"
-            latitude = location_soup.find(
-                "meta", attrs={"property": "og:location:latitude"}
-            )["content"]
-            longitude = location_soup.find(
-                "meta", attrs={"property": "og:location:longitude"}
-            )["content"]
-
-            hours = ""
-            days = location_soup.find(
-                "dl", attrs={"aria-label": "Store Hours"}
-            ).find_all("dt")
-            hours_list = location_soup.find(
-                "dl", attrs={"aria-label": "Store Hours"}
-            ).find_all("dd")
-
-            for x in range(len(days)):
-                day = days[x].text.strip()
-                hour = hours_list[x].text.strip()
-                hours = hours + day + " " + hour + ", "
-
-            hours = hours[:-2]
-
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": page_url,
-                "location_name": location_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": city,
-                "store_number": store_number,
-                "street_address": address,
-                "state": state,
-                "zip": zipp,
-                "phone": phone,
-                "location_type": location_type,
-                "hours": hours,
-                "country_code": country_code,
-            }
-
-
-def scrape():
-    field_defs = sp.SimpleScraperPipeline.field_definitions(
-        locator_domain=sp.MappingField(mapping=["locator_domain"]),
-        page_url=sp.MappingField(mapping=["page_url"]),
-        location_name=sp.MappingField(mapping=["location_name"]),
-        latitude=sp.MappingField(mapping=["latitude"]),
-        longitude=sp.MappingField(mapping=["longitude"]),
-        street_address=sp.MultiMappingField(
-            mapping=["street_address"], is_required=False
-        ),
-        city=sp.MappingField(
-            mapping=["city"],
-        ),
-        state=sp.MappingField(mapping=["state"], is_required=False),
-        zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
-        country_code=sp.MappingField(mapping=["country_code"]),
-        phone=sp.MappingField(mapping=["phone"], is_required=False),
-        store_number=sp.MappingField(mapping=["store_number"]),
-        hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
-        location_type=sp.MappingField(mapping=["location_type"], is_required=False),
+    row = SgRecord(
+        page_url=page_url,
+        location_name=location_name,
+        street_address=street_address,
+        city=city,
+        state=state,
+        zip_postal=postal,
+        country_code=country,
+        store_number=store_number,
+        location_type=location_type,
+        phone=phone,
+        latitude=latitude,
+        longitude=longitude,
+        locator_domain=locator_domain,
+        hours_of_operation=hours_of_operation,
     )
 
-    with SgWriter(
-        deduper=SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.PAGE_URL,
-                    SgRecord.Headers.LOCATION_NAME,
-                }
-            ),
-            duplicate_streak_failure_factor=100,
-        )
-    ) as writer:
-        pipeline = sp.SimpleScraperPipeline(
-            scraper_name="Crawler",
-            data_fetcher=get_data,
-            field_definitions=field_defs,
-            record_writer=writer,
-        )
-        pipeline.run()
+    sgw.write_row(row)
 
 
 if __name__ == "__main__":
-    scrape()
+    crawl_state = CrawlStateSingleton.get_instance()
+    locator_domain = "https://www.versace.com/"
+    log = sglog.SgLogSetup().get_logger(logger_name="versace.com")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0",
+        "Accept": "*/*",
+        "Referer": "https://www.versace.com/international/en/find-a-store/",
+        "Origin": "https://www.versace.com",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "same-origin",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "Pragma": "no-cache",
+        "Cache-Control": "no-cache",
+    }
+    with SgRequests() as session:
+        if not crawl_state.get_misc_value("got_urls"):
+            get_urls()
+
+        with SgWriter(
+            SgRecordDeduper(RecommendedRecordIds.PageUrlId),
+            dead_hand_interval=timedelta(hours=6),
+        ) as sgw:
+            with futures.ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_url = {
+                    executor.submit(get_data, url): url
+                    for url in crawl_state.request_stack_iter()
+                }
+                for future in futures.as_completed(future_to_url):
+                    future.result()
