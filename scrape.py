@@ -70,8 +70,8 @@ def get_urls():
         country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=10
     )
     for search_lat, search_lon in search:
-        test_lat = 39.904211
-        test_lon = 116.407395
+        test_lat = 39.904221
+        test_lon = 116.407385
         data = {
             "format": "ajax",
             "latitude": str(test_lat),
