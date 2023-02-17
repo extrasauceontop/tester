@@ -109,7 +109,6 @@ def get_urls():
         ):
             log.info(url)
             crawl_state.push_request(SerializableRequest(url=url))
-        return
     crawl_state.set_misc_value("got_urls", True)
 
 
