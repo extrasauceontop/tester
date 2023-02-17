@@ -74,8 +74,8 @@ def get_urls():
         test_lon = 116.407385
         data = {
             "format": "ajax",
-            "latitude": str(test_lat),
-            "longitude": str(test_lon),
+            "latitude": str(search_lat),
+            "longitude": str(search_lon),
             "country": "CN",
         }
         r = session.post(
@@ -91,7 +91,7 @@ def get_urls():
             search.found_nothing()
             continue
 
-        tree = html.fromstring(r.content)
+        tree = html.fromstring(r.text)
         sources = tree.xpath("//div/@data-marker-info")
         log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
         if not sources:
@@ -109,7 +109,7 @@ def get_urls():
         ):
             log.info(url)
             crawl_state.push_request(SerializableRequest(url=url))
-        return
+
     crawl_state.set_misc_value("got_urls", True)
 
 
