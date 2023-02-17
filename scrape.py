@@ -10,6 +10,7 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
+from proxyfier import ProxyProviders
 
 
 def get_params():
@@ -200,7 +201,7 @@ if __name__ == "__main__":
         "Pragma": "no-cache",
         "Cache-Control": "no-cache",
     }
-    with SgRequests() as session:
+    with SgRequests(proxy_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as session:
         if not crawl_state.get_misc_value("got_urls"):
             get_urls()
 
