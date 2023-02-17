@@ -67,7 +67,7 @@ def get_urls():
 
     params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
     search = DynamicGeoSearch(
-        country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=10
+        country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=100
     )
     for search_lat, search_lon in search:
         test_lat = 39.904221
