@@ -10,6 +10,7 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
+import time
 
 
 def get_params():
@@ -78,6 +79,7 @@ def get_urls():
         r = session.post(
             api, headers=headers, params=params, data=data, cookies=cookies
         )
+        time.sleep(0.5)
 
         if not r.status_code:
             log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
