@@ -10,7 +10,7 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
-import time
+from bs4 import BeautifulSoup as bs
 
 
 def get_params():
@@ -71,6 +71,7 @@ def get_urls():
     )
     for search_lat, search_lon in search:
         data = {
+            "address": "",
             "format": "ajax",
             "latitude": str(search_lat),
             "longitude": str(search_lon),
@@ -79,26 +80,26 @@ def get_urls():
         r = session.post(
             api, headers=headers, params=params, data=data, cookies=cookies
         )
-        time.sleep(0.5)
+        # time.sleep(1)
 
         if not r.status_code:
             log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
-            search.found_nothing()
+            # search.found_nothing()
             continue
         if r.status_code >= 400:
             log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
-            search.found_nothing()
+            # search.found_nothing()
             continue
 
-        log.info(r.text)
-        log.info("")
-        log.info("------------------------------------------------------------------")
-        log.info("")
+        with open("file.txt", "w", encoding="utf-8") as output:
+            print(r.text, file=output)
+
         tree = html.fromstring(r.text)
+        soup = bs(r.text, "html.parser")
         sources = tree.xpath("//div/@data-marker-info")
         log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
         if not sources:
-            search.found_nothing()
+            # search.found_nothing()
             continue
 
         for source in sources:
@@ -107,9 +108,8 @@ def get_urls():
             lng = j.get("longitude")
             search.found_location_at(lat, lng)
 
-        for url in tree.xpath(
-            "//ol[contains(@class, 'storelocator-results')]//a[@class='js-store-link']/@href"
-        ):
+        for a_tag in soup.find_all("a", attrs={"class": "js-store-link"}):
+            url = a_tag["href"]
             log.info(url)
             crawl_state.push_request(SerializableRequest(url=url))
     crawl_state.set_misc_value("got_urls", True)
@@ -185,13 +185,6 @@ def get_data(url_thing):
     sgw.write_row(row)
 
 
-# def check_response(response):
-#     if "BreadcrumbList" in response.text and "streetAddress" not in response.text:
-#         return False
-
-#     return True
-
-
 if __name__ == "__main__":
     crawl_state = CrawlStateSingleton.get_instance()
     locator_domain = "https://www.versace.com/"
@@ -216,7 +209,7 @@ if __name__ == "__main__":
 
         with SgWriter(
             SgRecordDeduper(RecommendedRecordIds.PageUrlId),
-            dead_hand_interval=timedelta(hours=6),
+            # dead_hand_interval=timedelta(hours=6),
         ) as sgw:
             with futures.ThreadPoolExecutor(max_workers=3) as executor:
                 future_to_url = {
