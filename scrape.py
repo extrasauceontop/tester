@@ -10,7 +10,6 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
-from proxyfier import ProxyProviders
 
 
 def get_params():
@@ -70,8 +69,6 @@ def get_urls():
         country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=50
     )
     for search_lat, search_lon in search:
-        test_lat = 39.904221
-        test_lon = 116.407385
         data = {
             "format": "ajax",
             "latitude": str(search_lat),
@@ -91,6 +88,10 @@ def get_urls():
             search.found_nothing()
             continue
 
+        log.info(r.text)
+        log.info("")
+        log.info("------------------------------------------------------------------")
+        log.info("")
         tree = html.fromstring(r.text)
         sources = tree.xpath("//div/@data-marker-info")
         log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
@@ -182,6 +183,13 @@ def get_data(url_thing):
     sgw.write_row(row)
 
 
+# def check_response(response):
+#     if "BreadcrumbList" in response.text and "streetAddress" not in response.text:
+#         return False
+
+#     return True
+
+
 if __name__ == "__main__":
     crawl_state = CrawlStateSingleton.get_instance()
     locator_domain = "https://www.versace.com/"
@@ -200,7 +208,7 @@ if __name__ == "__main__":
         "Pragma": "no-cache",
         "Cache-Control": "no-cache",
     }
-    with SgRequests(proxy_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as session:
+    with SgRequests() as session:
         if not crawl_state.get_misc_value("got_urls"):
             get_urls()
 
