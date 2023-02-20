@@ -84,11 +84,11 @@ def get_urls():
 
         if not r.status_code:
             log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
-            # search.found_nothing()
+            search.found_nothing()
             continue
         if r.status_code >= 400:
             log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
-            # search.found_nothing()
+            search.found_nothing()
             continue
 
         with open("file.txt", "w", encoding="utf-8") as output:
@@ -99,7 +99,7 @@ def get_urls():
         sources = tree.xpath("//div/@data-marker-info")
         log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
         if not sources:
-            # search.found_nothing()
+            search.found_nothing()
             continue
 
         for source in sources:
