@@ -13,7 +13,7 @@ from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
 from bs4 import BeautifulSoup as bs
 
 
-def get_params():
+def get_params(session):
     api = "https://www.versace.com/international/en/find-a-store/"
     r = session.get(api, headers=headers)
     tree = html.fromstring(r.text)
@@ -35,84 +35,87 @@ def get_params():
 
 
 def get_urls():
-    api = "https://www.versace.com/international/en/find-a-store/"
-    cookie, token, selector = get_params()
-    params = {
-        "dwcont": token,
-        "dwfrm_storelocator_findbycountry": "ok",
-    }
-    cookies = {
-        "dwsid": cookie,
-    }
-
-    for cc, adr in selector.items():
-        if cc == "CN":
-            continue
-
-        data = {
-            "address": adr,
-            "format": "ajax",
-            "country": cc,
+    with SgRequests() as session:
+        api = "https://www.versace.com/international/en/find-a-store/"
+        cookie, token, selector = get_params(session)
+        params = {
+            "dwcont": token,
+            "dwfrm_storelocator_findbycountry": "ok",
+        }
+        cookies = {
+            "dwsid": cookie,
         }
 
-        r = session.post(
-            api, headers=headers, params=params, data=data, cookies=cookies
+        for cc, adr in selector.items():
+            if cc == "CN":
+                continue
+
+            data = {
+                "address": adr,
+                "format": "ajax",
+                "country": cc,
+            }
+
+            r = session.post(
+                api, headers=headers, params=params, data=data, cookies=cookies
+            )
+            tree = html.fromstring(r.content)
+            urls = tree.xpath(
+                "//ol[contains(@class, 'storelocator-results')]//a[@class='js-store-link']/@href"
+            )
+            for url in urls:
+                crawl_state.push_request(SerializableRequest(url=url))
+
+    with SgRequests(response_successful=check_response) as session:
+        cookie, token, selector = get_params(session)
+        params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
+        search = DynamicGeoSearch(
+            country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=50
         )
-        tree = html.fromstring(r.content)
-        urls = tree.xpath(
-            "//ol[contains(@class, 'storelocator-results')]//a[@class='js-store-link']/@href"
-        )
-        for url in urls:
-            crawl_state.push_request(SerializableRequest(url=url))
+        for search_lat, search_lon in search:
+            data = {
+                "address": "",
+                "format": "ajax",
+                "latitude": str(search_lat),
+                "longitude": str(search_lon),
+                "country": "CN",
+            }
+            r = session.post(
+                api, headers=headers, params=params, data=data, cookies=cookies
+            )
+            # time.sleep(1)
 
-    params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
-    search = DynamicGeoSearch(
-        country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=50
-    )
-    for search_lat, search_lon in search:
-        data = {
-            "address": "",
-            "format": "ajax",
-            "latitude": str(search_lat),
-            "longitude": str(search_lon),
-            "country": "CN",
-        }
-        r = session.post(
-            api, headers=headers, params=params, data=data, cookies=cookies
-        )
-        # time.sleep(1)
+            if not r.status_code:
+                log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
+                search.found_nothing()
+                continue
+            if r.status_code >= 400:
+                log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
+                search.found_nothing()
+                continue
 
-        if not r.status_code:
-            log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
-            search.found_nothing()
-            continue
-        if r.status_code >= 400:
-            log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
-            search.found_nothing()
-            continue
+            with open("file.txt", "w", encoding="utf-8") as output:
+                print(r.text, file=output)
 
-        with open("file.txt", "w", encoding="utf-8") as output:
-            print(r.text, file=output)
+            tree = html.fromstring(r.text)
+            soup = bs(r.text, "html.parser")
+            sources = tree.xpath("//div/@data-marker-info")
+            log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
+            if not sources:
+                search.found_nothing()
+                continue
 
-        tree = html.fromstring(r.text)
-        soup = bs(r.text, "html.parser")
-        sources = tree.xpath("//div/@data-marker-info")
-        log.info(f"{(search_lat, search_lon)}: {len(sources)} records..")
-        if not sources:
-            search.found_nothing()
-            continue
+            for source in sources:
+                j = json.loads(source)
+                lat = j.get("latitude")
+                lng = j.get("longitude")
+                search.found_location_at(lat, lng)
 
-        for source in sources:
-            j = json.loads(source)
-            lat = j.get("latitude")
-            lng = j.get("longitude")
-            search.found_location_at(lat, lng)
-
-        for a_tag in soup.find_all("a", attrs={"class": "js-store-link"}):
-            url = a_tag["href"]
-            log.info(url)
-            crawl_state.push_request(SerializableRequest(url=url))
-    crawl_state.set_misc_value("got_urls", True)
+            for a_tag in soup.find_all("a", attrs={"class": "js-store-link"}):
+                url = a_tag["href"]
+                log.info(url)
+                crawl_state.push_request(SerializableRequest(url=url))
+        crawl_state.set_misc_value("got_urls", True)
 
 
 def get_data(url_thing):
@@ -148,7 +151,6 @@ def get_data(url_thing):
     phone = j.get("telephone")
     store_number = page_url.split("=")[-1]
     location_type = ",".join(set(tree.xpath("//div[@class='store-types']/p/text()")))
-
     g = j.get("geo") or {}
     latitude = g.get("latitude")
     longitude = g.get("longitude")
@@ -185,6 +187,15 @@ def get_data(url_thing):
     sgw.write_row(row)
 
 
+def check_response(response):
+    tree = html.fromstring(response.text)
+    sources = tree.xpath("//div/@data-marker-info")
+
+    if len(sources) == 0 and '{"success":false}' not in response.text:
+        return False
+
+    return True
+
 if __name__ == "__main__":
     crawl_state = CrawlStateSingleton.get_instance()
     locator_domain = "https://www.versace.com/"
@@ -203,10 +214,11 @@ if __name__ == "__main__":
         "Pragma": "no-cache",
         "Cache-Control": "no-cache",
     }
-    with SgRequests() as session:
-        if not crawl_state.get_misc_value("got_urls"):
-            get_urls()
 
+    if not crawl_state.get_misc_value("got_urls"):
+        get_urls()
+
+    with SgRequests() as session:
         with SgWriter(
             SgRecordDeduper(RecommendedRecordIds.PageUrlId),
             # dead_hand_interval=timedelta(hours=6),
