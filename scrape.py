@@ -11,6 +11,7 @@ from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
 from bs4 import BeautifulSoup as bs
+import time
 
 
 def get_params(session):
@@ -67,7 +68,6 @@ def get_urls():
                 crawl_state.push_request(SerializableRequest(url=url))
 
     with SgRequests(response_successful=check_response) as session:
-        cookie, token, selector = get_params(session)
         params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
         search = DynamicGeoSearch(
             country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=50
@@ -84,7 +84,6 @@ def get_urls():
             r = session.post(
                 api, headers=headers, params=params, data=data, cookies=cookies
             )
-            # time.sleep(1)
 
             if not r.status_code:
                 log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
@@ -192,6 +191,7 @@ def check_response(response):
 
     if len(sources) == 0 and '{"success":false}' not in response.text:
         log.info("here")
+        time.sleep(10)
         return False
     log.info("there")
     return True
