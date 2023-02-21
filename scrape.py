@@ -73,6 +73,7 @@ def get_urls():
             country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=50
         )
         for search_lat, search_lon in search:
+            
             data = {
                 "address": "",
                 "format": "ajax",
@@ -93,9 +94,6 @@ def get_urls():
                 log.error(f"{(search_lat, search_lon)} skipped b/c {r}")
                 search.found_nothing()
                 continue
-
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(r.text, file=output)
 
             tree = html.fromstring(r.text)
             soup = bs(r.text, "html.parser")
@@ -188,12 +186,14 @@ def get_data(url_thing):
 
 
 def check_response(response):
+    log.info("checking...")
     tree = html.fromstring(response.text)
     sources = tree.xpath("//div/@data-marker-info")
 
     if len(sources) == 0 and '{"success":false}' not in response.text:
+        log.info("here")
         return False
-
+    log.info("there")
     return True
 
 if __name__ == "__main__":
