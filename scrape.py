@@ -67,12 +67,24 @@ def get_urls():
             for url in urls:
                 crawl_state.push_request(SerializableRequest(url=url))
 
-    with SgRequests(response_successful=check_response) as session:
+    with SgRequests() as session:
         params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
         search = DynamicGeoSearch(
             country_codes=[SearchableCountries.CHINA], expected_search_radius_miles=50
         )
+        x = 0
         for search_lat, search_lon in search:
+            x = x+1
+            if x%20 == 0:
+                cookie, token, selector = get_params(session)
+                cookies = {
+                    "dwsid": cookie,
+                }
+                params = {
+                    "dwcont": token,
+                    "dwfrm_storelocator_findbycountry": "ok",
+                }
+                params["dwfrm_storelocator_find"] = params.pop("dwfrm_storelocator_findbycountry")
             
             data = {
                 "address": "",
@@ -191,7 +203,6 @@ def check_response(response):
 
     if len(sources) == 0 and '{"success":false}' not in response.text:
         log.info("here")
-        time.sleep(10)
         return False
     log.info("there")
     return True
