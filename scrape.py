@@ -89,7 +89,7 @@ def fetch_data(page_source, sgw: SgWriter):
         sgw.write_row(row)
 
 
-def check_response(driver):
+def check_response(dresponse):
     print("here")
     if "full-store-list" in driver.current_url:
         return True
