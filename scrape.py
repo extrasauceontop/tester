@@ -7,6 +7,7 @@ from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgselenium import SgChrome
 from sglogging import SgLogSetup
+from proxyfier import ProxyProviders
 
 
 logger = SgLogSetup().get_logger("https://specsavers.co.nz/")
@@ -89,10 +90,12 @@ def fetch_data(page_source, sgw: SgWriter):
 
 
 def check_response(driver):
+    print("here")
     if "full-store-list" in driver.current_url:
         return True
     
     try:
+        print("there")
         a = driver.page_source
         tree = html.fromstring(a)
         js_block = "".join(tree.xpath('//script[@type="application/ld+json"]/text()'))
@@ -100,6 +103,7 @@ def check_response(driver):
         return True
     
     except Exception:
+        print("anywhere")
         return False
 
 
@@ -119,7 +123,7 @@ if __name__ == "__main__":
         )
     ) as writer:
         for api_url in urls:
-            with SgChrome(eager_page_load_strategy=True, is_headless=False) as driver:
+            with SgChrome(eager_page_load_strategy=True, is_headless=False, response_successful=check_response, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
                 driver.get(api_url)
                 page_source = driver.page_source
                 fetch_data(page_source, writer)
