@@ -88,16 +88,18 @@ def fetch_data(page_source, sgw: SgWriter):
         sgw.write_row(row)
 
 
-def page_contains_page_url_and_opening_message(page_source: str) -> str:
-    return page_source
-
-
-def page_is_html(driver) -> bool:
-    time.sleep(30)
-    try:
-        page_contains_page_url_and_opening_message(driver.page_source)
+def check_response(driver):
+    if "full-store-list" in driver.current_url:
         return True
-    except:
+    
+    try:
+        a = driver.page_source
+        tree = html.fromstring(a)
+        js_block = "".join(tree.xpath('//script[@type="application/ld+json"]/text()'))
+        json.loads(js_block)
+        return True
+    
+    except Exception:
         return False
 
 
