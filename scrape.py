@@ -1,129 +1,111 @@
-import json
-import time
-from lxml import html
+from bs4 import BeautifulSoup as bs
+from sgrequests import SgRequests
+from sglogging import sglog
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgselenium import SgChrome
-from sglogging import SgLogSetup
-from proxyfier import ProxyProviders
+from sgscrape.sgrecord_id import RecommendedRecordIds
+from sgscrape.sgpostal import parse_address_usa
+import re
+
+DOMAIN = "ninjasushiusa.com"
+BASE_URL = f"https://{DOMAIN}"
+HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
+}
+MISSING = SgRecord.MISSING
+log = sglog.SgLogSetup().get_logger(logger_name=DOMAIN)
 
 
-logger = SgLogSetup().get_logger("https://specsavers.co.nz/")
-
-locator_domain = "https://specsavers.co.nz/"
-
-
-def fetch_data(page_source, sgw: SgWriter):
-    tree = html.fromstring(page_source)
-    div = tree.xpath("//h3/following-sibling::ul[1]/li/a")
-    for d in div:
-        slug = "".join(d.xpath("./@href"))
-        page_url, locator_domain = "", ""
-        if api_url == "https://www.specsavers.com.au/stores/full-store-list":
-            page_url = f"https://www.specsavers.com.au/stores/{slug}"
-            locator_domain = "http://specsavers.com.au/"
-        if api_url == "https://www.specsavers.co.nz/stores/full-store-list":
-            page_url = f"https://www.specsavers.co.nz/stores/{slug}"
-            locator_domain = "https://specsavers.co.nz/"
-        if page_url.find("hearing") != -1:
-            continue
-        logger.info(page_url)
-
-        driver.get(page_url)
-
-        a = driver.page_source
-        tree = html.fromstring(a)
-        js_block = "".join(tree.xpath('//script[@type="application/ld+json"]/text()'))
-        js = json.loads(js_block)
-
-        location_name = js.get("name") or "<MISSING>"
-        a = js.get("address")
-        street_address = a.get("streetAddress") or "<MISSING>"
-        state = a.get("addressRegion") or "<MISSING>"
-        postal = a.get("postalCode") or "<MISSING>"
-        country_code = a.get("addressCountry") or "<MISSING>"
-        city = a.get("addressLocality") or "<MISSING>"
-        latitude = js.get("geo").get("latitude") or "<MISSING>"
-        longitude = js.get("geo").get("longitude") or "<MISSING>"
-        phone = js.get("telephone") or "<MISSING>"
-        hours = js.get("openingHoursSpecification")
-        tmp = []
-        if hours:
-            for h in hours:
-                day = (
-                    str(h.get("dayOfWeek"))
-                    .replace('"', "")
-                    .replace("[", "")
-                    .replace("]", "")
-                    .replace("'", "")
-                    .strip()
-                )
-                if day.find(",") != -1:
-                    day = day.split(",")[0].strip() + " - " + day.split(",")[-1].strip()
-                opens = h.get("opens")
-                closes = h.get("closes")
-                line = f"{day} {opens} - {closes}"
-                tmp.append(line)
-        hours_of_operation = "; ".join(tmp) or "<MISSING>"
-
-        row = SgRecord(
-            locator_domain=locator_domain,
-            page_url=page_url,
-            location_name=location_name,
-            street_address=street_address,
-            city=city,
-            state=state,
-            zip_postal=postal,
-            country_code=country_code,
-            store_number=SgRecord.MISSING,
-            phone=phone,
-            location_type=SgRecord.MISSING,
-            latitude=latitude,
-            longitude=longitude,
-            hours_of_operation=hours_of_operation,
-            raw_address=f"{street_address}, {city}, {state} {postal}",
-        )
-
-        sgw.write_row(row)
-
-
-def check_response(dresponse):
-    print("here")
-    if "full-store-list" in driver.current_url:
-        return True
-    
+def getAddress(raw_address: str):
     try:
-        print("there")
-        a = driver.page_source
-        tree = html.fromstring(a)
-        js_block = "".join(tree.xpath('//script[@type="application/ld+json"]/text()'))
-        json.loads(js_block)
-        return True
-    
-    except Exception:
-        print("anywhere")
-        return False
+        if raw_address is not None:
+            data = parse_address_usa(raw_address)
+            street_address = ", ".join(
+                filter(lambda x: x, [data.street_address_1, data.street_address_2])
+            )
+            city = data.city or MISSING
+            state = data.state or MISSING
+            zip_postal = data.postcode or MISSING
+            return street_address, city, state, zip_postal
+    except Exception as e:
+        log.info(f"No valid address {e}")
+        pass
+    return MISSING, MISSING, MISSING, MISSING
+
+
+def pull_content(http: SgRequests, url: str):
+    log.info("Pull content => " + url)
+    req = http.get(url, headers=HEADERS)
+    if req.status_code == 200:
+        return bs(req.content, "lxml")
+    return False
+
+
+def get_latlong(url: str):
+    longlat = re.search(r"!2d(-?[\d]*\.[\d]*)\!3d(-?[\d]*\.[\d]*)", url)
+    if not longlat:
+        latlong = re.search(r"(-?[\d]*\.[\d]*),(-?[\d]*\.[\d]*)", url)
+        if latlong:
+            return latlong.group(1), latlong.group(2)
+    else:
+        return longlat.group(2), longlat.group(1)
+    return MISSING, MISSING
+
+
+def fetch_data():
+    log.info("Fetching store_locator data")
+    with SgRequests() as http:
+        soup = pull_content(http, f"{BASE_URL}/locations")
+        stores_element = soup.find_all("a", text="Take-Out Menu")
+        for store_elemnt in stores_element:
+            info = store_elemnt.find_previous("div", class_="row")
+            try:
+                location_name = info.find("h3").text.strip()
+            except:
+                location_name = info.find("span").text.strip()
+            direction_link = info.find("a", text="Get Directions")
+            raw_address = direction_link.parent.find_previous("p").text.strip()
+            street_address, city, state, zip_postal = getAddress(raw_address)
+            phone = info.select_one("a[href*='tel:']").text.replace("Call", "").strip()
+            country_code = "US"
+            hours_of_operation = (
+                direction_link.find_next("strong")
+                .parent.get_text(strip=True, separator=",")
+                .replace("Hours:,", "")
+                .strip()
+            )
+            latitude, longitude = get_latlong(direction_link["href"])
+            log.info(street_address)
+            yield SgRecord(
+                locator_domain=DOMAIN,
+                page_url=f"{BASE_URL}/locations",
+                location_name=location_name,
+                street_address=street_address,
+                city=city,
+                state=state,
+                zip_postal=zip_postal,
+                country_code=country_code,
+                phone=phone,
+                latitude=latitude,
+                longitude=longitude,
+                hours_of_operation=hours_of_operation,
+                raw_address=raw_address,
+            )
+
+
+def scrape():
+    log.info(f"start {DOMAIN} Scraper")
+    count = 0
+    with SgWriter(SgRecordDeduper(RecommendedRecordIds.StreetAddressId)) as writer:
+        results = fetch_data()
+        for rec in results:
+            writer.write_row(rec)
+            count = count + 1
+    log.info(f"No of records being processed: {count}")
+    log.info("Finished")
 
 
 if __name__ == "__main__":
-    logger.info("Scrape Started")
-    urls = [
-        "https://www.specsavers.com.au/stores/full-store-list",
-        "https://www.specsavers.co.nz/stores/full-store-list",
-    ]
-    with SgWriter(
-        SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.PAGE_URL,
-                }
-            )
-        )
-    ) as writer:
-        for api_url in urls:
-            with SgChrome(eager_page_load_strategy=True, is_headless=False, response_successful=check_response, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
-                driver.get(api_url)
-                page_source = driver.page_source
-                fetch_data(page_source, writer)
+    scrape()
