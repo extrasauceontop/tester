@@ -76,13 +76,6 @@ def fetch_data():
                 "raw_address": " ".join(raw_address)
             }
 
-            item = SgRecord(
-
-                hours_of_operation=hours_of_operation,
-                raw_address=" ".join(raw_address),
-            )
-
-            yield item
 
 
 def scrape():
