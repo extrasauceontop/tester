@@ -6,9 +6,6 @@ from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgwriter import SgWriter
 from sgpostal.sgpostal import parse_address_intl
 from sgselenium.sgselenium import SgFirefox
-import ssl
-
-ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def fetch_data():
