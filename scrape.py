@@ -5,7 +5,7 @@ from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgwriter import SgWriter
 from sgpostal.sgpostal import parse_address_intl
-from sgselenium.sgselenium import SgFirefox
+from sgselenium import SgFirefox
 
 
 def fetch_data():
