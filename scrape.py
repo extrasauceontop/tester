@@ -1,111 +1,135 @@
-from bs4 import BeautifulSoup as bs
-from sgrequests import SgRequests
-from sglogging import sglog
+from lxml import etree
+from sgscrape import simple_scraper_pipeline as sp
 from sgscrape.sgrecord import SgRecord
-from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgscrape.sgrecord_id import RecommendedRecordIds
+from sgscrape.sgrecord_id import SgRecordID
+from sgscrape.sgwriter import SgWriter
 from sgpostal.sgpostal import parse_address_intl
-import re
+from sgselenium.sgselenium import SgFirefox
+import ssl
 
-DOMAIN = "ninjasushiusa.com"
-BASE_URL = f"https://{DOMAIN}"
-HEADERS = {
-    "Accept": "application/json, text/plain, */*",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
-}
-MISSING = SgRecord.MISSING
-log = sglog.SgLogSetup().get_logger(logger_name=DOMAIN)
-
-
-def getAddress(raw_address: str):
-    try:
-        if raw_address is not None:
-            data = parse_address_intl(raw_address)
-            street_address = ", ".join(
-                filter(lambda x: x, [data.street_address_1, data.street_address_2])
-            )
-            city = data.city or MISSING
-            state = data.state or MISSING
-            zip_postal = data.postcode or MISSING
-            return street_address, city, state, zip_postal
-    except Exception as e:
-        log.info(f"No valid address {e}")
-        pass
-    return MISSING, MISSING, MISSING, MISSING
-
-
-def pull_content(http: SgRequests, url: str):
-    log.info("Pull content => " + url)
-    req = http.get(url, headers=HEADERS)
-    if req.status_code == 200:
-        return bs(req.content, "lxml")
-    return False
-
-
-def get_latlong(url: str):
-    longlat = re.search(r"!2d(-?[\d]*\.[\d]*)\!3d(-?[\d]*\.[\d]*)", url)
-    if not longlat:
-        latlong = re.search(r"(-?[\d]*\.[\d]*),(-?[\d]*\.[\d]*)", url)
-        if latlong:
-            return latlong.group(1), latlong.group(2)
-    else:
-        return longlat.group(2), longlat.group(1)
-    return MISSING, MISSING
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def fetch_data():
-    log.info("Fetching store_locator data")
-    with SgRequests() as http:
-        soup = pull_content(http, f"{BASE_URL}/locations")
-        stores_element = soup.find_all("a", text="Take-Out Menu")
-        for store_elemnt in stores_element:
-            info = store_elemnt.find_previous("div", class_="row")
-            try:
-                location_name = info.find("h3").text.strip()
-            except:
-                location_name = info.find("span").text.strip()
-            direction_link = info.find("a", text="Get Directions")
-            raw_address = direction_link.parent.find_previous("p").text.strip()
-            street_address, city, state, zip_postal = getAddress(raw_address)
-            phone = info.select_one("a[href*='tel:']").text.replace("Call", "").strip()
-            country_code = "US"
-            hours_of_operation = (
-                direction_link.find_next("strong")
-                .parent.get_text(strip=True, separator=",")
-                .replace("Hours:,", "")
-                .strip()
+    start_url = "https://burtonsgrill.com/locations/"
+    domain = "burtonsgrill.com"
+
+    with SgFirefox() as driver:
+        driver.get_and_wait_for_request(start_url)
+
+        dom = etree.HTML(driver.page_source)
+
+        all_locations = dom.xpath('//div[@class="locations-group"]//a/@href')
+        for page_url in all_locations:
+            driver.get(page_url)
+            loc_dom = etree.HTML(driver.page_source)
+
+            location_name = loc_dom.xpath('//h1[@class="title h3"]/text()')
+            location_name = location_name[0] if location_name else ""
+            raw_address = loc_dom.xpath('//a[contains(@href, "maps")]/text()')
+            if not raw_address:
+                all_locations += loc_dom.xpath(
+                    '//div[@class="locations-group"]//a/@href'
+                )
+                continue
+            raw_address = raw_address[0].split(", ")
+            street_address = raw_address[0]
+            addr = parse_address_intl(" ".join(raw_address))
+            phone = loc_dom.xpath('//a[contains(@href, "tel")]/text()')
+            phone = phone[0] if phone else ""
+            geo = (
+                loc_dom.xpath('//a[contains(@href, "maps")]/@href')[0]
+                .split("/@")[-1]
+                .split(",")[:2]
             )
-            latitude, longitude = get_latlong(direction_link["href"])
-            log.info(street_address)
-            yield SgRecord(
-                locator_domain=DOMAIN,
-                page_url=f"{BASE_URL}/locations",
-                location_name=location_name,
-                street_address=street_address,
-                city=city,
-                state=state,
-                zip_postal=zip_postal,
-                country_code=country_code,
-                phone=phone,
-                latitude=latitude,
-                longitude=longitude,
+            latitude = geo[0]
+            longitude = geo[1]
+            hoo = loc_dom.xpath(
+                '//div[i[@class="icon-clock"]]/following-sibling::div[1]//text()'
+            )
+            hoo = [e.strip() for e in hoo if e.strip()]
+            hours_of_operation = " ".join(hoo) if hoo else ""
+            if hours_of_operation and "Coming Soon" in hours_of_operation:
+                continue
+
+            city = addr.city
+            state = addr.state
+            zipp = addr.postcode
+
+            country_code = "<MISSING>"
+            store_number = "<MISSING>"
+            location_type = "<MISSING>"
+
+            yield {
+                "locator_domain": domain,
+                "page_url": page_url,
+                "location_name": location_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "city": city,
+                "street_address": street_address,
+                "state": state,
+                "zip": zipp,
+                "store_number": store_number,
+                "phone": phone,
+                "location_type": location_type,
+                "hours": hours_of_operation,
+                "country_code": country_code,
+                "raw_address": " ".join(raw_address)
+            }
+
+            item = SgRecord(
+
                 hours_of_operation=hours_of_operation,
-                raw_address=raw_address,
+                raw_address=" ".join(raw_address),
             )
+
+            yield item
 
 
 def scrape():
-    log.info(f"start {DOMAIN} Scraper")
-    count = 0
-    with SgWriter(SgRecordDeduper(RecommendedRecordIds.StreetAddressId)) as writer:
-        results = fetch_data()
-        for rec in results:
-            writer.write_row(rec)
-            count = count + 1
-    log.info(f"No of records being processed: {count}")
-    log.info("Finished")
+    field_defs = sp.SimpleScraperPipeline.field_definitions(
+        locator_domain=sp.MappingField(mapping=["locator_domain"]),
+        page_url=sp.MappingField(mapping=["page_url"]),
+        location_name=sp.MappingField(mapping=["location_name"]),
+        latitude=sp.MappingField(mapping=["latitude"]),
+        longitude=sp.MappingField(mapping=["longitude"]),
+        street_address=sp.MultiMappingField(
+            mapping=["street_address"], is_required=False
+        ),
+        city=sp.MappingField(
+            mapping=["city"],
+        ),
+        state=sp.MappingField(mapping=["state"], is_required=False),
+        zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
+        country_code=sp.MappingField(mapping=["country_code"]),
+        phone=sp.MappingField(mapping=["phone"], is_required=False),
+        store_number=sp.MappingField(mapping=["store_number"]),
+        hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
+        location_type=sp.MappingField(mapping=["location_type"], is_required=False),
+    )
+
+    with SgWriter(
+        deduper=SgRecordDeduper(
+            SgRecordID(
+                {
+                    SgRecord.Headers.STREET_ADDRESS,
+                    SgRecord.Headers.LOCATION_NAME,
+                }
+            ),
+            duplicate_streak_failure_factor=100,
+        )
+    ) as writer:
+        pipeline = sp.SimpleScraperPipeline(
+            scraper_name="Crawler",
+            data_fetcher=fetch_data,
+            field_definitions=field_defs,
+            record_writer=writer,
+        )
+        pipeline.run()
 
 
 if __name__ == "__main__":
     scrape()
+
