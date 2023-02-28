@@ -5,7 +5,7 @@ from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
-from sgscrape.sgpostal import parse_address_usa
+from sgpostal.sgpostal import parse_address_intl
 import re
 
 DOMAIN = "ninjasushiusa.com"
@@ -21,7 +21,7 @@ log = sglog.SgLogSetup().get_logger(logger_name=DOMAIN)
 def getAddress(raw_address: str):
     try:
         if raw_address is not None:
-            data = parse_address_usa(raw_address)
+            data = parse_address_intl(raw_address)
             street_address = ", ".join(
                 filter(lambda x: x, [data.street_address_1, data.street_address_2])
             )
