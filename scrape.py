@@ -130,9 +130,8 @@ def get_data():
                 "location_type": "<MISSING>",
                 "hours": "<MISSING>",
                 "country_code": "TH",
+                "raw_address": store["address"]
             }
-
-            return
 
 
 def scrape():
@@ -155,6 +154,7 @@ def scrape():
         store_number=sp.MappingField(mapping=["store_number"]),
         hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
         location_type=sp.MappingField(mapping=["location_type"], is_required=False),
+        raw_address=sp.MappingField(mapping=["raw_address"], is_required=False)
     )
 
     with SgWriter(
