@@ -133,6 +133,7 @@ def get_data():
                 "raw_address": store["address"]
             }
 
+            return
 
 def scrape():
     field_defs = sp.SimpleScraperPipeline.field_definitions(
