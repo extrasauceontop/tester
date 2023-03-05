@@ -116,7 +116,7 @@ def get_data():
             hours_parts = page_soup.find_all(
                 "div",
                 attrs={
-                    "class": "sui-row___2iT_8 AddressAndOpeningHours_address-card__hours-block__4Dh07"
+                    "class": "sui-row___2iT_8 AddressAndOpeningHours_address-card__hours-block__gTvoe"
                 },
             )
             for part in hours_parts:
@@ -185,3 +185,4 @@ if __name__ == "__main__":
         scrape()
 
 # <a href="tel:01604300397" class="u-mb-100___3R7-W u-mt-50___3WmZl u-text-bold___7FAxX u-text-aegean-500___1SgEM AddressAndOpeningHours_address-card__phone-block__ShzYD">01604300397</a>
+# <div class="sui-row___2iT_8 AddressAndOpeningHours_address-card__hours-block__gTvoe"><div class="sui-col___2s8I_ sui-col-md-6___3d_rj sui-col-lg-4___6xUIL">Monday</div><div class="sui-col___2s8I_ sui-col-md-6___3d_rj sui-col-lg-6___VT-dx u-text-aegean-500___1SgEM u-text-nowrap___1-Efl">08:30 - 18:00</div></div>
