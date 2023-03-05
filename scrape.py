@@ -1,148 +1,187 @@
-import usaddress
-from sgselenium import SgFirefox
+from sgselenium import SgChromeWithoutSeleniumWire
+import json
+from sgscrape import simple_scraper_pipeline as sp
+from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgscrape.sgrecord_id import RecommendedRecordIds
-from sglogging import sglog
-from sgscrape.pause_resume import CrawlStateSingleton
+from sgscrape.sgrecord_id import SgRecordID
+from bs4 import BeautifulSoup as bs
+import time
 
 
-def parse_us_address(raw_address: str) -> tuple:
-    tag = {
-        "Recipient": "recipient",
-        "AddressNumber": "address1",
-        "AddressNumberPrefix": "address1",
-        "AddressNumberSuffix": "address1",
-        "StreetName": "address1",
-        "StreetNamePreDirectional": "address1",
-        "StreetNamePreModifier": "address1",
-        "StreetNamePreType": "address1",
-        "StreetNamePostDirectional": "address1",
-        "StreetNamePostModifier": "address1",
-        "StreetNamePostType": "address1",
-        "CornerOf": "address1",
-        "IntersectionSeparator": "address1",
-        "LandmarkName": "address1",
-        "USPSBoxGroupID": "address1",
-        "USPSBoxGroupType": "address1",
-        "USPSBoxID": "address1",
-        "USPSBoxType": "address1",
-        "OccupancyType": "address2",
-        "OccupancyIdentifier": "address2",
-        "SubaddressIdentifier": "address2",
-        "SubaddressType": "address2",
-        "PlaceName": "city",
-        "StateName": "state",
-        "ZipCode": "postal",
-    }
+def extract_json(html_string):
+    json_objects = []
+    count = 0
 
-    try:
-        a = usaddress.tag(raw_address, tag_mapping=tag)[0]
-        adr1 = a.get("address1") or ""
-        adr2 = a.get("address2") or ""
-        street_address = f"{adr1} {adr2}".strip()
-        city = a.get("city") or ""
-        state = a.get("state") or ""
-        postal = a.get("postal") or ""
-    except usaddress.RepeatedLabelError:
-        state, postal = raw_address.split(", ")[-1].split()
-        city = raw_address.split(", ")[-2]
-        street_address = raw_address.split(f", {city}")[0]
+    brace_count = 0
+    for element in html_string:
 
-    return street_address, city, state, postal
+        if element == "{":
+            brace_count = brace_count + 1
+            if brace_count == 1:
+                start = count
+
+        elif element == "}":
+            brace_count = brace_count - 1
+            if brace_count == 0:
+                end = count
+                try:
+                    json_objects.append(json.loads(html_string[start : end + 1]))
+                except Exception:
+                    pass
+        count = count + 1
+
+    return json_objects
 
 
-def fetch_data():
-    page_number = crawl_state.get_misc_value("page_num_value")
+def get_url_location_name_combos():
+    x = 0
+    combos = {}
     while True:
-        page_number = page_number + 1
-        driver.get("https://www.edwardjones.com/us-en")
-        data = driver.execute_async_script(
-            """
-            var done = arguments[0]
-            fetch("https://www.edwardjones.com/api/v3/financial-advisor/results?q=68007&distance=5000&distance_unit=mi&page="""
-            + str(page_number)
-            + """&matchblock=&searchtype=2", {
-                "headers": {
-                    "accept": "*/*",
-                    "accept-language": "en-US,en;q=0.9",
-                    "sec-ch-ua-mobile": "?0",
-                    "sec-fetch-dest": "empty",
-                    "sec-fetch-mode": "cors",
-                    "sec-fetch-site": "same-origin",
-                },
-                "referrer": "https://www.edwardjones.com/us-en/search/find-a-financial-advisor?fasearch=68007&searchtype=2",
-                "referrerPolicy": "no-referrer-when-downgrade",
-                "body": null,
-                "method": "GET",
-                "mode": "cors",
-                "credentials": "include"
-            })
-            .then(res => res.json())
-            .then(data => done(data))
-            """
+        x = x + 1
+        page_url_api = (
+            "https://api.storyblok.com/v2/cdn/stories?version=published&resolve_links=url&cv=1668189659&per_page=100&filter_query%5Bcomponent%5D%5Bin%5D=page&filter_query%5Bspecialisation%5D%5Bin%5D=dealership&filter_query%5Blocation_context.dealershipId%5D%5Bin%5D=31%2C175%2C54%2C208%2C361%2C78%2C28%2C79%2C30%2C310%2C333%2C337%2C11%2C42%2C43%2C262%2C41%2C58%2C72%2C264%2C15%2C211%2C341%2C207%2C335%2C336%2C338%2C339%2C136%2C155%2C209%2C349%2C355%2C86%2C108%2C118%2C125%2C265%2C344%2C351%2C357%2C52%2C53%2C151%2C153%2C154%2C289%2C348%2C354%2C40%2C268%2C57%2C61%2C69%2C73%2C132%2C263%2C115%2C122%2C290%2C7%2C350%2C356%2C358%2C359%2C345%2C51%2C59%2C70%2C92%2C286%2C288%2C346%2C353%2C38%2C93%2C130%2C131%2C185%2C328%2C329%2C10%2C343%2C186%2C266%2C105%2C106%2C107%2C279%2C12%2C20%2C85%2C91%2C285%2C22%2C25%2C347%2C360%2C36%2C159%2C5%2C56%2C71%2C278%2C18%2C23%2C26%2C35%2C45%2C174%2C190%2C239%2C246%2C34%2C156%2C65%2C3%2C14%2C16%2C27%2C194%2C305%2C74%2C75%2C188%2C301%2C145%2C6%2C117%2C124%2C287%2C39%2C312%2C19%2C206%2C1%2C280%2C2%2C114%2C121%2C269%2C270%2C292%2C247%2C248%2C254%2C255%2C256%2C111%2C127%2C113%2C311%2C112%2C126%2C258%2C110%2C295%2C97%2C98%2C99%2C109%2C95%2C96%2C303&page="
+            + str(x)
+            + "&token=B0hvbPsZUUrvo00QhWmPdwtt"
         )
+        driver.get(page_url_api)
+        response = driver.page_source
 
-        js = data.get("results") or []
-        if len(js) == 0:
-            return
+        json_objects = extract_json(response)
+        if len(json_objects[0]["stories"]) == 0:
+            break
 
-        for j in js:
-            latitude = j.get("lat")
-            longitude = j.get("lon")
+        for story in json_objects[0]["stories"]:
+            dealer_id = story["content"]["location_context"]["dealershipId"]
+            combos[dealer_id] = story["full_slug"]
 
-            raw_address = j.get("address") or ""
-            street_address, city, state, postal = parse_us_address(raw_address)
-            country_code = "US"
-            store_number = j.get("faEntityId")
+    return combos
 
-            location_name = j.get("faName")
-            slug = j.get("faUrl")
-            page_url = f"https://www.edwardjones.com{slug}"
-            phone = j.get("phone")
 
-            _tmp = []
-            hours_of_operation = ";".join(_tmp)
+def check_response(dresponse):  # noqa
+    response = driver.page_source
+    if "Request unsuccessful. Incapsula" in response:
+        return False
 
-            row = SgRecord(
-                page_url=page_url,
-                location_name=location_name,
-                street_address=street_address,
-                city=city,
-                state=state,
-                zip_postal=postal,
-                country_code=country_code,
-                latitude=latitude,
-                longitude=longitude,
-                phone=phone,
-                store_number=store_number,
-                locator_domain=locator_domain,
-                raw_address=raw_address,
-                hours_of_operation=hours_of_operation,
+    return True
+
+
+def get_data():
+    url = "https://www.sytner.co.uk/api/location/dealership?startLocation="
+    combos = get_url_location_name_combos()
+    driver.get(url)
+    response = driver.page_source
+    json_objects = extract_json(response)
+
+    for location in json_objects:
+        locator_domain = "sytner.co.uk"
+        location_name = location["name"]
+        latitude = location["latitude"]
+        longitude = location["longitude"]
+        city = location["town"]
+        store_number = str(location["dealershipID"])
+        address = (
+            location["address1"]
+            + location["address2"]
+            + location["address3"]
+            + location["address4"]
+        ).strip()
+        state = location["county"]
+        zipp = location["postcode"]
+        location_type = location["franchiseName"]
+        country_code = "GB"
+
+        page_url = (
+            "https://www.sytner.co.uk/" + combos[store_number]
+            if combos.get(store_number) is not None
+            else SgRecord.MISSING
+        )
+        print(page_url)
+        if page_url != SgRecord.MISSING:
+            driver.get(page_url)
+            time.sleep(2)
+            page_response = driver.page_source
+            page_soup = bs(page_response, "html.parser")
+
+            try:
+                phone = page_response.split("tel:")[1].split('"')[0]
+            except Exception:
+                driver.get(page_url)
+                time.sleep(2)
+                page_response = driver.page_source
+                page_soup = bs(page_response, "html.parser")
+                phone = page_response.split("tel:")[1].split('"')[0]
+
+            hours = ""
+            hours_parts = page_soup.find_all(
+                "div",
+                attrs={
+                    "class": "sui-row___2iT_8 AddressAndOpeningHours_address-card__hours-block__4Dh07"
+                },
             )
+            for part in hours_parts:
+                hours = hours + part.text.strip() + ", "
+            hours = hours[:-2]
 
-            sgw.write_row(row)
+            yield {
+                "locator_domain": locator_domain,
+                "page_url": page_url,
+                "location_name": location_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "city": city,
+                "store_number": store_number,
+                "street_address": address,
+                "state": state,
+                "zip": zipp,
+                "phone": phone,
+                "location_type": location_type,
+                "hours": hours,
+                "country_code": country_code,
+            }
 
-        crawl_state.set_misc_value("page_num_value", page_number)
+
+def scrape():
+    field_defs = sp.SimpleScraperPipeline.field_definitions(
+        locator_domain=sp.MappingField(mapping=["locator_domain"]),
+        page_url=sp.MappingField(mapping=["page_url"]),
+        location_name=sp.MappingField(mapping=["location_name"]),
+        latitude=sp.MappingField(mapping=["latitude"]),
+        longitude=sp.MappingField(mapping=["longitude"]),
+        street_address=sp.MultiMappingField(
+            mapping=["street_address"], is_required=False
+        ),
+        city=sp.MappingField(mapping=["city"], is_required=False),
+        state=sp.MappingField(mapping=["state"], is_required=False),
+        zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
+        country_code=sp.MappingField(mapping=["country_code"]),
+        phone=sp.MappingField(mapping=["phone"], is_required=False),
+        store_number=sp.MappingField(mapping=["store_number"]),
+        hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
+        location_type=sp.MappingField(mapping=["location_type"], is_required=False),
+    )
+
+    with SgWriter(
+        deduper=SgRecordDeduper(
+            SgRecordID(
+                {
+                    SgRecord.Headers.PAGE_URL,
+                }
+            ),
+            duplicate_streak_failure_factor=100,
+        )
+    ) as writer:
+        pipeline = sp.SimpleScraperPipeline(
+            scraper_name="Crawler",
+            data_fetcher=get_data,
+            field_definitions=field_defs,
+            record_writer=writer,
+        )
+        pipeline.run()
 
 
 if __name__ == "__main__":
-    crawl_state = CrawlStateSingleton.get_instance()
-    if not crawl_state.get_misc_value("page_num_set"):
-        crawl_state.set_misc_value("page_num_set", True)
-        crawl_state.set_misc_value("page_num_value", 0)
+    with SgChromeWithoutSeleniumWire(block_third_parties=False, is_headless=False) as driver:
+        scrape()
 
-    locator_domain = "https://www.edwardjones.com/"
-    log = sglog.SgLogSetup().get_logger(logger_name="edwardjones.com")
-    headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:97.0) Gecko/20100101 Firefox/97.0",
-        "Upgrade-Insecure-Requests": "1",
-    }
-    with SgFirefox() as driver:
-        with SgWriter(
-            SgRecordDeduper(
-                RecommendedRecordIds.StoreNumberId, duplicate_streak_failure_factor=-1
-            )
-        ) as sgw:
-            fetch_data()
+# <a href="tel:01604300397" class="u-mb-100___3R7-W u-mt-50___3WmZl u-text-bold___7FAxX u-text-aegean-500___1SgEM AddressAndOpeningHours_address-card__phone-block__ShzYD">01604300397</a>
