@@ -11,6 +11,7 @@ def get_data():
     url = "https://mygarage.honda.com/s/find-a-dealer?brand=acura"
     search = DynamicZipSearch(country_codes=[SearchableCountries.USA], expected_search_radius_miles=100)
     for search_code in search:
+        search.found_nothing()
         with SgChrome(is_headless=False) as driver:
             driver.get(url)
             data = driver.execute_async_script(
@@ -30,7 +31,7 @@ def get_data():
                     },
                     "referrer": "https://mygarage.honda.com/s/find-a-dealer?brand=acura",
                     "referrerPolicy": "origin-when-cross-origin",
-                    "body": "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2294%3Ba%22%2C%22descriptor%22%3A%22aura%3A%2F%2FApexActionController%2FACTION%24execute%22%2C%22callingDescriptor%22%3A%22UNKNOWN%22%2C%22params%22%3A%7B%22namespace%22%3A%22%22%2C%22classname%22%3A%22OwnAPIController%22%2C%22method%22%3A%22searchDealers%22%2C%22params%22%3A%7B%22latitude%22%3A%22%22%2C%22longitude%22%3A%22%22%2C%22poiType%22%3A%22BODYSHOP%22%2C%22city%22%3A%22%22%2C%22state%22%3A%22%22%2C%22postalCode%22%3A%22%""" + str(search_code) + """22%2C%22miles%22%3A%22500%22%2C%22brand%22%3A%22Acura%22%2C%22pOIName%22%3A%22%22%2C%22filterCode%22%3A%22%22%7D%2C%22cacheable%22%3Afalse%2C%22isContinuation%22%3Afalse%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22D7zdsGvlxZfFP0e3F1H_2A%22%2C%22app%22%3A%22siteforce%3AcommunityApp%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AcommunityApp%22%3A%22Fb67IrZvgf4B_I4Mv3jqAA%22%2C%22COMPONENT%40markup%3A%2F%2Finstrumentation%3Ao11ySecondaryLoader%22%3A%22NAR59T88qTprOlgZG3yLoQ%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2Fs%2Ffind-a-dealer%3Fbrand%3Dacura&aura.token=null",
+                    "body": "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2294%3Ba%22%2C%22descriptor%22%3A%22aura%3A%2F%2FApexActionController%2FACTION%24execute%22%2C%22callingDescriptor%22%3A%22UNKNOWN%22%2C%22params%22%3A%7B%22namespace%22%3A%22%22%2C%22classname%22%3A%22OwnAPIController%22%2C%22method%22%3A%22searchDealers%22%2C%22params%22%3A%7B%22latitude%22%3A%22%22%2C%22longitude%22%3A%22%22%2C%22poiType%22%3A%22BODYSHOP%22%2C%22city%22%3A%22%22%2C%22state%22%3A%22%22%2C%22postalCode%22%3A%22""" + str(search_code) + """%22%2C%22miles%22%3A%22500%22%2C%22brand%22%3A%22Acura%22%2C%22pOIName%22%3A%22%22%2C%22filterCode%22%3A%22%22%7D%2C%22cacheable%22%3Afalse%2C%22isContinuation%22%3Afalse%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22D7zdsGvlxZfFP0e3F1H_2A%22%2C%22app%22%3A%22siteforce%3AcommunityApp%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AcommunityApp%22%3A%22Fb67IrZvgf4B_I4Mv3jqAA%22%2C%22COMPONENT%40markup%3A%2F%2Finstrumentation%3Ao11ySecondaryLoader%22%3A%22NAR59T88qTprOlgZG3yLoQ%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2Fs%2Ffind-a-dealer%3Fbrand%3Dacura&aura.token=null",
                     "method": "POST",
                     "mode": "cors",
                     "credentials": "include"
@@ -39,8 +40,12 @@ def get_data():
                 .then(data => done(data))
                 """
             )
-
-            print(len(data["actions"][0]["returnValue"]["returnValue"]["poiResponse"]["pois"]["poi"]))
+            with open("file.txt", "w", encoding="utf-8") as output:
+                print(data, file=output)
+            try:
+                print(len(data["actions"][0]["returnValue"]["returnValue"]["poiResponse"]["pois"]["poi"]))
+            except Exception:
+                continue
             for location in data["actions"][0]["returnValue"]["returnValue"]["poiResponse"]["pois"]["poi"]:
                 locator_domain = "mygarage.honda.com"
                 try:
@@ -124,3 +129,6 @@ def scrape():
 
 if __name__ == "__main__":
     scrape()
+
+# "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2292%3Ba%22%2C%22descriptor%22%3A%22aura%3A%2F%2FApexActionController%2FACTION%24execute%22%2C%22callingDescriptor%22%3A%22UNKNOWN%22%2C%22params%22%3A%7B%22namespace%22%3A%22%22%2C%22classname%22%3A%22OwnAPIController%22%2C%22method%22%3A%22searchDealers%22%2C%22params%22%3A%7B%22latitude%22%3A%22%22%2C%22longitude%22%3A%22%22%2C%22poiType%22%3A%22B%22%2C%22city%22%3A%22%22%2C%22state%22%3A%22%22%2C%22postalCode%22%3A%2235216%22%2C%22miles%22%3A%2210%22%2C%22brand%22%3A%22Acura%22%2C%22pOIName%22%3A%22%22%2C%22filterCode%22%3A%22%22%7D%2C%22cacheable%22%3Afalse%2C%22isContinuation%22%3Afalse%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22D7zdsGvlxZfFP0e3F1H_2A%22%2C%22app%22%3A%22siteforce%3AcommunityApp%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AcommunityApp%22%3A%22Fb67IrZvgf4B_I4Mv3jqAA%22%2C%22COMPONENT%40markup%3A%2F%2Finstrumentation%3Ao11ySecondaryLoader%22%3A%22NAR59T88qTprOlgZG3yLoQ%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2Fs%2Ffind-a-dealer%3Fbrand%3Dacura&aura.token=null"
+# "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2294%3Ba%22%2C%22descriptor%22%3A%22aura%3A%2F%2FApexActionController%2FACTION%24execute%22%2C%22callingDescriptor%22%3A%22UNKNOWN%22%2C%22params%22%3A%7B%22namespace%22%3A%22%22%2C%22classname%22%3A%22OwnAPIController%22%2C%22method%22%3A%22searchDealers%22%2C%22params%22%3A%7B%22latitude%22%3A%22%22%2C%22longitude%22%3A%22%22%2C%22poiType%22%3A%22%22%2C%22city%22%3A%22%22%2C%22state%22%3A%22%22%2C%22postalCode%22%3A%22""" + str(search_code) + """%22%2C%22miles%22%3A%22500%22%2C%22brand%22%3A%22Acura%22%2C%22pOIName%22%3A%22%22%2C%22filterCode%22%3A%22%22%7D%2C%22cacheable%22%3Afalse%2C%22isContinuation%22%3Afalse%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22D7zdsGvlxZfFP0e3F1H_2A%22%2C%22app%22%3A%22siteforce%3AcommunityApp%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AcommunityApp%22%3A%22Fb67IrZvgf4B_I4Mv3jqAA%22%2C%22COMPONENT%40markup%3A%2F%2Finstrumentation%3Ao11ySecondaryLoader%22%3A%22NAR59T88qTprOlgZG3yLoQ%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2Fs%2Ffind-a-dealer%3Fbrand%3Dacura&aura.token=null"
