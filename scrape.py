@@ -99,6 +99,6 @@ if __name__ == "__main__":
     locator_domain = "https://jdsports.pl/"
     page_url = "https://jdsports.pl/shops"
 
-    with SgRequests(proxy_country="pl") as session:
+    with SgRequests() as session:
         with SgWriter(SgRecordDeduper(RecommendedRecordIds.StoreNumberId)) as sgw:
             fetch_data()
