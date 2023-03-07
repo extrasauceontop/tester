@@ -9,7 +9,7 @@ from sgzip.dynamic import DynamicGeoSearch, SearchableCountries
 
 def get_data():
     url = "https://mygarage.honda.com/s/find-a-dealer?brand=acura"
-    search = DynamicGeoSearch(country_codes=SearchableCountries.USA, expected_search_radius_miles=100)
+    search = DynamicGeoSearch(country_codes=[SearchableCountries.USA], expected_search_radius_miles=100)
     for search_lat, search_lon in search:
         with SgChrome(is_headless=False) as driver:
             driver.get(url)
