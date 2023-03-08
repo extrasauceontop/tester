@@ -33,8 +33,14 @@ def scrape_page_for_data(driver, page_url):
     print(driver.page_source)
     lat_lon_parts = page_soup.find("div", attrs={"id": "map_marker"})
 
-    latitude = lat_lon_parts["data-lat"]
-    longitude = lat_lon_parts["data-lng"]
+    try:
+        latitude = lat_lon_parts["data-lat"]
+        longitude = lat_lon_parts["data-lng"]
+
+    except Exception:
+        lat_lon_parts = page_soup.find("a", attrs={"title": "Open this area in Google Maps (opens a new window)"})["href"]
+        latitude = lat_lon_parts.split("@")[1].split(",")[0]
+        longitude = lat_lon_parts.split("@")[1].split(",")[0]
 
     address_parts = (
         page_soup.find("div", attrs={"class": "location-contacts location"})
