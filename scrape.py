@@ -28,7 +28,9 @@ def scrape_page_for_data(driver, page_url):
     )
     while "  " in location_name:
         location_name = location_name.replace("  ", " ")
+    print(page_url)
 
+    print(driver.page_source)
     lat_lon_parts = page_soup.find("div", attrs={"id": "map_marker"})
 
     latitude = lat_lon_parts["data-lat"]
