@@ -28,9 +28,7 @@ def scrape_page_for_data(driver, page_url):
     )
     while "  " in location_name:
         location_name = location_name.replace("  ", " ")
-    print(page_url)
 
-    print(driver.page_source)
     lat_lon_parts = page_soup.find("div", attrs={"id": "map_marker"})
 
     try:
@@ -38,8 +36,20 @@ def scrape_page_for_data(driver, page_url):
         longitude = lat_lon_parts["data-lng"]
 
     except Exception:
-        latitude = page_response.split("https://maps.googleapis.com/maps/api/js/ViewportInfoService.GetViewportInfo")[1].split(";1d")[1].split("&")[0]
-        longitude = page_response.split("https://maps.googleapis.com/maps/api/js/ViewportInfoService.GetViewportInfo")[1].split(";2d")[1].split("&")[0]
+        latitude = (
+            page_response.split(
+                "https://maps.googleapis.com/maps/api/js/ViewportInfoService.GetViewportInfo"
+            )[1]
+            .split(";1d")[1]
+            .split("&")[0]
+        )
+        longitude = (
+            page_response.split(
+                "https://maps.googleapis.com/maps/api/js/ViewportInfoService.GetViewportInfo"
+            )[1]
+            .split(";2d")[1]
+            .split("&")[0]
+        )
 
     address_parts = (
         page_soup.find("div", attrs={"class": "location-contacts location"})
@@ -152,7 +162,12 @@ def get_data():
                     latitude = li_tag["data-post-lat"]
                     longitude = li_tag["data-post-lng"]
                 except Exception:
-                    lat_lon_parts = soup.find("a", attrs={"title": "Open this area in Google Maps (opens a new window)"})["href"]
+                    lat_lon_parts = soup.find(
+                        "a",
+                        attrs={
+                            "title": "Open this area in Google Maps (opens a new window)"
+                        },
+                    )["href"]
                     latitude = lat_lon_parts.split("@")[1].split(",")[0]
                     longitude = lat_lon_parts.split("@")[1].split(",")[0]
 
