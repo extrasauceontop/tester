@@ -21,6 +21,19 @@ locator_domain = "https://www.hurley.com.au"
 MISSING = SgRecord.MISSING
 
 
+def check_response(dresponse):
+    if driver.current_url == "https://www.hurley.com.au/allstores":
+        return True
+    
+    try:
+        driver.page_source.split('"item":')[1].split("},")[0] + "}"
+        return True
+    
+    except Exception:
+        return False
+
+
+
 def get_parsed_address(raw_address):
     pa = parse_address_intl(raw_address)
     street_address = filter(lambda x: x, [pa.street_address_1, pa.street_address_2])
@@ -105,5 +118,5 @@ def scrape():
 
 
 if __name__ == "__main__":
-    with SgChromeWithoutSeleniumWire() as driver:
+    with SgChromeWithoutSeleniumWire(page_meets_expectations=check_response) as driver:
         scrape()
