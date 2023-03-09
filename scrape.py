@@ -23,12 +23,14 @@ headers1 = {
 
 
 def fetch_data():
+    print("here")
     apiurl = "https://api.campanile.com/api/v1/graphql"
     url = "https://www.campanile.com/en-us/our-hotels/"
     r = session.get(url, headers=headers1)
     soup = BeautifulSoup(r.text, "html.parser")
     statelist = soup.select("a[href*=our-hotels]")
     linklist = []
+    print("there")
     for state in statelist:
         try:
             term = state.find("h2").text
@@ -55,8 +57,7 @@ def fetch_data():
             linklist.append(link)
             store = loc["id"]
             try:
-                session1 = SgRequests()
-                r = session1.get(link, headers=headers1)
+                r = session.get(link, headers=headers1)
             except:
                 continue
             try:
