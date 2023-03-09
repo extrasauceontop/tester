@@ -45,9 +45,14 @@ def fetch_data():
         )
         try:
             print("maybe")
-            loclist = session.post(apiurl, data=dataobj, headers=headers).json()[
-                "data"
-            ]["resortsSearchV2"]["currentBrandResorts"]
+            response_stuff = session.post(apiurl, data=dataobj, headers=headers)
+            try:
+                print(response_stuff.text)
+            except Exception:
+                print(response_stuff.status_code)
+                print(response_stuff.response.text)
+            
+            loclist = response_stuff.json()["data"]["resortsSearchV2"]["currentBrandResorts"]
             print("yes")
         except:
             continue
@@ -113,5 +118,5 @@ def scrape():
 
 
 if __name__ == "__main__":
-    with SgRequests() as session:
+    with SgRequests(retries_with_fresh_proxy_ip=1) as session:
         scrape()
