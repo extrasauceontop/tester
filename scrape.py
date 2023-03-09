@@ -44,9 +44,11 @@ def fetch_data():
             + '","searchBy":"REGION","code":"","locale":"en-us","brandCode":"CA","withRandomOrder":true,"withCrossSell":false,"top":null}},"query":"query resortsSearchQueryV2($resortsSearchInput: MbResortsSearchInputType!) {\n  resortsSearchV2(resortsSearchInput: $resortsSearchInput) {\n    crossSellBrandResorts {\n      ...ResortFavorite\n      ...ResortSearchData\n      __typename\n    }\n    currentBrandResorts {\n      ...ResortFavorite\n      ...ResortSearchData\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment ResortFavorite on MbResortType {\n  id: resortCode\n  isFavorite\n  __typename\n}\n\nfragment ResortSearchData on MbResortType {\n  resortCode\n  resortName\n  brandCode\n  city\n  cityPageUrl\n  mainPicture\n  stars\n  distanceFromDownTown\n  website\n  brandMapIconUrl\n  brandMapIconAlt\n  tripAdvisorRating\n  tripAdvisorRatingImageUrl\n  tripAdvisorNbReviews\n  isRenovated\n  isOldWebsite\n  location {\n    longitude\n    latitude\n    __typename\n  }\n  preferredLocales {\n    isDefault\n    localeCode\n    __typename\n  }\n  eReputation {\n    score\n    reviewsCount\n    scoreDescription\n    __typename\n  }\n  externalBookingEngineUrl\n  isCutOffOutDated\n  __typename\n}\n"}'
         )
         try:
+            print("maybe")
             loclist = session.post(apiurl, data=dataobj, headers=headers).json()[
                 "data"
             ]["resortsSearchV2"]["currentBrandResorts"]
+            print("yes")
         except:
             continue
         for loc in loclist:
