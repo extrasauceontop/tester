@@ -49,15 +49,15 @@ def get_parsed_address(raw_address):
 
 
 def get_store_data(page_url):
-    with SgChromeWithoutSeleniumWire() as driver:
-        driver.get(page_url)
 
-        temp = driver.page_source.split('"item":')[1].split("},")[0] + "}"
-        temp = json.loads(temp)
-        latitude = temp.get("latitude")
-        longitude = temp.get("longitude")
-        location_type = temp.get("store_type")
-        store_number = temp.get("entity_id")
+    driver.get(page_url)
+
+    temp = driver.page_source.split('"item":')[1].split("},")[0] + "}"
+    temp = json.loads(temp)
+    latitude = temp.get("latitude")
+    longitude = temp.get("longitude")
+    location_type = temp.get("store_type")
+    store_number = temp.get("entity_id")
     return latitude, longitude, store_number, location_type
 
 
