@@ -24,7 +24,7 @@ MISSING = SgRecord.MISSING
 def check_response(dresponse):
     if driver.current_url == "https://www.hurley.com.au/allstores":
         return True
-    
+    time.sleep(40)
     try:
         driver.page_source.split('"item":')[1].split("},")[0] + "}"
         return True
@@ -51,7 +51,7 @@ def get_parsed_address(raw_address):
 def get_store_data(page_url):
     with SgChromeWithoutSeleniumWire() as driver:
         driver.get(page_url)
-        time.sleep(40)
+
         temp = driver.page_source.split('"item":')[1].split("},")[0] + "}"
         temp = json.loads(temp)
         latitude = temp.get("latitude")
