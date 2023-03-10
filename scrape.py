@@ -46,6 +46,7 @@ def fetch_data():
         )
         try:
             print("maybe")
+            print(term)
             response_stuff = session.post(apiurl, data=dataobj, headers=headers)
             # try:
             #     print(response_stuff.text)
