@@ -28,9 +28,10 @@ def fetch_data():
     url = "https://www.campanile.com/en-us/our-hotels/"
     r = session.get(url, headers=headers1)
     soup = BeautifulSoup(r.text, "html.parser")
-    statelist = soup.select("a[href*=our-hotels]")
+    statelist = soup.find("div", attrs={"class": "DestinationsHomepagePagestyled__Grid-c4l0ph-4 eyGgqC"}).select("a[href*=our-hotels]")
     linklist = []
     print("there")
+    
     for state in statelist:
         try:
             term = state.find("h2").text
@@ -46,15 +47,16 @@ def fetch_data():
         try:
             print("maybe")
             response_stuff = session.post(apiurl, data=dataobj, headers=headers)
-            try:
-                print(response_stuff.text)
-            except Exception:
-                print(response_stuff.status_code)
-                print(response_stuff.response.text)
+            # try:
+            #     print(response_stuff.text)
+            # except Exception:
+            #     print(response_stuff.status_code)
+            #     print(response_stuff.response.text)
             
             loclist = response_stuff.json()["data"]["resortsSearchV2"]["currentBrandResorts"]
             print("yes")
-        except:
+        except Exception as e:
+            print(e)
             continue
         for loc in loclist:
 
@@ -120,3 +122,4 @@ def scrape():
 if __name__ == "__main__":
     with SgRequests(retries_with_fresh_proxy_ip=1) as session:
         scrape()
+
