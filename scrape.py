@@ -6,6 +6,7 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgscrape.sgrecord_deduper import SgRecordDeduper
+from sgselenium import SgChrome
 
 website = "campanile_com"
 log = sglog.SgLogSetup().get_logger(logger_name=website)
@@ -32,77 +33,90 @@ def fetch_data():
     linklist = []
     print("there")
     
-    for state in statelist:
-        try:
-            term = state.find("h2").text
-        except:
-            continue
-        if "Hotels " in state.text:
-            continue
-        dataobj = (
-            '{"operationName":"resortsSearchQueryV2","variables":{"resortsSearchInput":{"homePageUrl":"https://www.campanile.com","term":"'
-            + term
-            + '","searchBy":"REGION","code":"","locale":"en-us","brandCode":"CA","withRandomOrder":true,"withCrossSell":false,"top":null}},"query":"query resortsSearchQueryV2($resortsSearchInput: MbResortsSearchInputType!) {\n  resortsSearchV2(resortsSearchInput: $resortsSearchInput) {\n    crossSellBrandResorts {\n      ...ResortFavorite\n      ...ResortSearchData\n      __typename\n    }\n    currentBrandResorts {\n      ...ResortFavorite\n      ...ResortSearchData\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment ResortFavorite on MbResortType {\n  id: resortCode\n  isFavorite\n  __typename\n}\n\nfragment ResortSearchData on MbResortType {\n  resortCode\n  resortName\n  brandCode\n  city\n  cityPageUrl\n  mainPicture\n  stars\n  distanceFromDownTown\n  website\n  brandMapIconUrl\n  brandMapIconAlt\n  tripAdvisorRating\n  tripAdvisorRatingImageUrl\n  tripAdvisorNbReviews\n  isRenovated\n  isOldWebsite\n  location {\n    longitude\n    latitude\n    __typename\n  }\n  preferredLocales {\n    isDefault\n    localeCode\n    __typename\n  }\n  eReputation {\n    score\n    reviewsCount\n    scoreDescription\n    __typename\n  }\n  externalBookingEngineUrl\n  isCutOffOutDated\n  __typename\n}\n"}'
-        )
-        try:
-            print("maybe")
+    with SgChrome(is_headless=False) as driver:
+        driver.get(url)
+
+        for state in statelist:
+            try:
+                term = state.find("h2").text
+            except:
+                continue
+            if "Hotels " in state.text:
+                continue
             print(term)
-            response_stuff = session.post(apiurl, data=dataobj, headers=headers)
-            # try:
-            #     print(response_stuff.text)
-            # except Exception:
-            #     print(response_stuff.status_code)
-            #     print(response_stuff.response.text)
+            try:
+                data = driver.execute_async_script(
+                    """
+                    var done = arguments[0]
+                    fetch("https://api.campanile.com/api/v1/graphql", {
+                        "headers": {
+                            "accept": "*/*",
+                            "accept-language": "en-US,en;q=0.9",
+                            "content-type": "application/json",
+                            "sec-ch-ua-mobile": "?0",
+                            "sec-fetch-dest": "empty",
+                            "sec-fetch-mode": "cors",
+                            "sec-fetch-site": "same-site"
+                        },
+                        "referrer": "https://www.campanile.com/",
+                        "referrerPolicy": "strict-origin-when-cross-origin",
+                        "body": "{'operationName':'resortsSearchQueryV2','variables':{'resortsSearchInput':{'homePageUrl':'https://www.campanile.com','term':'""" + term + """','searchBy':'CITY','code':'','locale':'en-us','brandCode':'CA','withRandomOrder':false,'withCrossSell':true,'top':null}},'query':'query resortsSearchQueryV2($resortsSearchInput: MbResortsSearchInputType!) {\\n  resortsSearchV2(resortsSearchInput: $resortsSearchInput) {\\n    crossSellBrandResorts {\\n      ...ResortFavorite\\n      ...ResortSearchData\\n      __typename\\n    }\\n    currentBrandResorts {\\n      ...ResortFavorite\\n      ...ResortSearchData\\n      __typename\\n    }\\n    __typename\\n  }\\n}\\n\\nfragment ResortFavorite on MbResortType {\\n  id: resortCode\\n  isFavorite\\n  __typename\\n}\\n\\nfragment ResortSearchData on MbResortType {\\n  resortCode\\n  resortName\\n  brandCode\\n  city\\n  cityPageUrl\\n  mainPicture\\n  stars\\n  distanceFromDownTown\\n  website\\n  brandMapIconUrl\\n  brandMapIconAlt\\n  isRenovated\\n  isOldWebsite\\n  location {\\n    longitude\\n    latitude\\n    __typename\\n  }\\n  preferredLocales {\\n    isDefault\\n    localeCode\\n    __typename\\n  }\\n  eReputation {\\n    score\\n    reviewsCount\\n    scoreDescription\\n    __typename\\n  }\\n  externalBookingEngineUrl\\n  isCutOffOutDated\\n  __typename\\n}\\n'}",
+                        "method": "POST",
+                        "mode": "cors",
+                        "credentials": "include"
+                    })
+                    .then(res => res.json())
+                    .then(data => done(data))
+                    """
+                )
+            except Exception:
+                continue
             
-            loclist = response_stuff.json()["data"]["resortsSearchV2"]["currentBrandResorts"]
-            print("yes")
-        except Exception as e:
-            print(e)
-            continue
-        for loc in loclist:
+            loclist = data["data"]["resortsSearchV2"]["currentBrandResorts"]
+            for loc in loclist:
 
-            link = loc["website"]
-            if link in linklist:
-                continue
-            linklist.append(link)
-            store = loc["id"]
-            try:
-                r = session.get(link, headers=headers1)
-            except:
-                continue
-            try:
-                content = r.text.split('<script type="application/ld+json">', 1)[
-                    1
-                ].split("</script", 1)[0]
+                link = loc["website"]
+                if link in linklist:
+                    continue
+                linklist.append(link)
+                store = loc["id"]
+                try:
+                    r = session.get(link, headers=headers1)
+                except:
+                    continue
+                try:
+                    content = r.text.split('<script type="application/ld+json">', 1)[
+                        1
+                    ].split("</script", 1)[0]
 
-                content = (json.loads(content))["mainEntity"][0]["mainEntity"]
-            except:
-                continue
-            title = content["name"]
-            log.info(title)
-            street = str(content["address"]["streetAddress"]).replace("\n", " ").strip()
-            city = content["address"]["addressLocality"]
-            pcode = content["address"]["postalCode"]
-            ccode = content["address"]["addressCountry"]
-            phone = content["telephone"]
-            lat, longt = content["hasMap"].split("=")[-1].split(",")
-            hours = str(content["checkinTime"]) + " - " + str(content["checkoutTime"])
-            yield SgRecord(
-                locator_domain="https://www.campanile.com/",
-                page_url=link,
-                location_name=title,
-                street_address=street,
-                city=city,
-                state=SgRecord.MISSING,
-                zip_postal=pcode,
-                country_code=ccode,
-                store_number=str(store),
-                phone=phone,
-                location_type=SgRecord.MISSING,
-                latitude=str(lat),
-                longitude=str(longt),
-                hours_of_operation=hours,
-            )
+                    content = (json.loads(content))["mainEntity"][0]["mainEntity"]
+                except:
+                    continue
+                title = content["name"]
+                log.info(title)
+                street = str(content["address"]["streetAddress"]).replace("\n", " ").strip()
+                city = content["address"]["addressLocality"]
+                pcode = content["address"]["postalCode"]
+                ccode = content["address"]["addressCountry"]
+                phone = content["telephone"]
+                lat, longt = content["hasMap"].split("=")[-1].split(",")
+                hours = str(content["checkinTime"]) + " - " + str(content["checkoutTime"])
+                yield SgRecord(
+                    locator_domain="https://www.campanile.com/",
+                    page_url=link,
+                    location_name=title,
+                    street_address=street,
+                    city=city,
+                    state=SgRecord.MISSING,
+                    zip_postal=pcode,
+                    country_code=ccode,
+                    store_number=str(store),
+                    phone=phone,
+                    location_type=SgRecord.MISSING,
+                    latitude=str(lat),
+                    longitude=str(longt),
+                    hours_of_operation=hours,
+                )
 
 
 def scrape():
