@@ -153,6 +153,10 @@ def get_data():
                             + address_parts[zipp_index].split(" ")[1].replace(",", "")
                         )
                         country_code = "CA"
+
+                        if bool(re.search(r"\d", state)) is True:
+                            state = "<MISSING>"
+                            zipp = state
                 store_number = li_tag["data-post-id"]
                 phone = li_tag.find(
                     "div", attrs={"class": "loc-phone sans-serif"}
