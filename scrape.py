@@ -129,6 +129,7 @@ def get_data():
                 address_status = "Lost"
                 city_status = "Lost"
                 for line in address_parts:
+                    line = line.strip()
                     if (
                         bool(re.search(r"\d", line)) is True
                         and address_status == "Lost"
