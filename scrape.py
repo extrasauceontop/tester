@@ -1,8 +1,9 @@
 from sgselenium import SgFirefox
+from proxyfier import ProxyProviders
 
 if __name__ == "__main__":
     url = "https://7leavescafe.com/locations"
-    with SgFirefox(is_headless=False) as driver:
+    with SgFirefox(is_headless=False, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
         driver.get(url)
         response = driver.page_source
 
