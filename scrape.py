@@ -1,5 +1,4 @@
 import time
-
 from lxml import html
 from sglogging import SgLogSetup
 from sgselenium import SgChromeForCloudFlare
@@ -8,12 +7,13 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from urllib.parse import unquote
+from proxyfier import ProxyProviders
 
 
 def fetch_data():
     api = "https://www.bluenile.com/jewelry-stores"
 
-    with SgChromeForCloudFlare() as fox:
+    with SgChromeForCloudFlare(proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as fox:
         fox.get(api)
         time.sleep(30)
         source = fox.page_source
@@ -24,7 +24,7 @@ def fetch_data():
             print(page_url)
             # try:
             fox.get(page_url)
-            time.sleep(20)
+            # time.sleep(20)
             tree = html.fromstring(fox.page_source)
             # except:
             #     log.error(f"{page_url} skipped b/c Selenium..")
