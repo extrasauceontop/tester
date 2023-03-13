@@ -19,7 +19,7 @@ def check_response(dresponse):
             tree = html.fromstring(fox.page_source)
             "".join(tree.xpath("//h1[@itemprop='name']/text()")).strip()
             return True
-        except Exception
+        except Exception:
             return False
     
     else:
