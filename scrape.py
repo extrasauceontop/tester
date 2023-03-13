@@ -15,7 +15,12 @@ def check_response(dresponse):
     root = html.fromstring(source)
     urls = root.xpath("//a[@class='store-name']/@href")
     if len(urls) == 0:
-        return False
+        try:
+            tree = html.fromstring(fox.page_source)
+            "".join(tree.xpath("//h1[@itemprop='name']/text()")).strip()
+            return True
+        except Exception
+            return False
     
     else:
         return True
