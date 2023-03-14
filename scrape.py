@@ -1,110 +1,119 @@
-import time
-from lxml import html
-from sglogging import SgLogSetup
-from sgselenium import SgChrome
+from bs4 import BeautifulSoup as bs
+from sgrequests import SgRequests
+from sglogging import sglog
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
-from urllib.parse import unquote
-from proxyfier import ProxyProviders
+from sgpostal.sgpostal import parse_address_usa
+import re
+
+DOMAIN = "maceys.com"
+BASE_URL = f"https://{DOMAIN}"
+HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
+}
+MISSING = SgRecord.MISSING
+log = sglog.SgLogSetup().get_logger(logger_name=DOMAIN)
 
 
-def check_response(dresponse):
-    source = fox.page_source
-    root = html.fromstring(source)
-    urls = root.xpath("//a[@class='store-name']/@href")
-    if len(urls) == 0:
-        try:
-            tree = html.fromstring(fox.page_source)
-            "".join(tree.xpath("//h1[@itemprop='name']/text()")).strip()
-            return True
-        except Exception:
-            return False
-    
-    else:
-        return True
+def getAddress(raw_address: str):
+    try:
+        if raw_address is not None:
+            data = parse_address_usa(raw_address)
+            street_address = ", ".join(
+                filter(lambda x: x, [data.street_address_1, data.street_address_2])
+            )
+            city = data.city or MISSING
+            state = data.state or MISSING
+            zip_postal = data.postcode or MISSING
+            return street_address, city, state, zip_postal
+    except Exception as e:
+        log.info(f"No valid address {e}")
+        pass
+    return MISSING, MISSING, MISSING, MISSING
+
+
+def pull_content(http: SgRequests, url: str):
+    log.info("Pull content => " + url)
+    req = http.get(url, headers=HEADERS)
+    if req.status_code == 200:
+        return bs(req.content, "lxml")
+    return False
 
 
 def fetch_data():
-    api = "https://www.bluenile.com/jewelry-stores"
-
-    fox.get(api)
-    # time.sleep(30)
-    source = fox.page_source
-    root = html.fromstring(source)
-    urls = root.xpath("//a[@class='store-name']/@href")
-
-    for page_url in urls:
-        print(page_url)
-        # try:
-        fox.get(page_url)
-        # time.sleep(20)
-        tree = html.fromstring(fox.page_source)
-        # except:
-        #     log.error(f"{page_url} skipped b/c Selenium..")
-        #     continue
-
-        if tree.xpath("//p[@class='coming-soon']"):
-            log.info(f"{page_url} skipped b/c Coming Soon..")
-            continue
-
-        log.info(f"{page_url}: got html..")
-        location_name = "".join(tree.xpath("//h1[@itemprop='name']/text()")).strip()
-        street_address = "".join(
-            tree.xpath("//span[@itemprop='streetAddress']/text()")
-        ).strip()
-        city = "".join(
-            tree.xpath("//span[@itemprop='addressLocality']/text()")
-        ).strip()
-        state = "".join(
-            tree.xpath("//span[@itemprop='addressRegion']/text()")
-        ).strip()
-        postal = "".join(
-            tree.xpath("//span[@itemprop='postalCode']/text()")
-        ).strip()
-        phone = "".join(tree.xpath("//span[@itemprop='telephone']/text()")).strip()
-
-        try:
-            text = unquote(
-                "".join(tree.xpath("//a[contains(text(), 'View On Map')]/@href"))
+    log.info("Fetching store_locator data")
+    with SgRequests() as http:
+        soup = pull_content(http, f"{BASE_URL}/pharmacy/locations")
+        urls = [
+            BASE_URL + url["href"]
+            for url in soup.select("div[role='list'] a[href*='/locations']")
+        ]
+        urls.append(f"{BASE_URL}/provo")
+        for page_url in urls:
+            store = pull_content(http, page_url)
+            location_name = store.find(class_="text-h2").text.strip()
+            el_addr = store.find("h3", text="Address")
+            if not el_addr:
+                raw_address = (
+                    store.find("h5", text=re.compile(r"Address.*"))
+                    .text.split(":")[-1]
+                    .strip()
+                )
+                phone = (
+                    store.find("h5", text=re.compile(r"Phone.*"))
+                    .text.split(":")[-1]
+                    .strip()
+                )
+                hours_of_operation = (
+                    store.find("h5", text=re.compile(r"Store Hours.*"))
+                    .text.split(":")[-1]
+                    .replace(";", ",")
+                    .replace("Open", "")
+                    .strip()
+                    .rstrip(",")
+                )
+            else:
+                raw_address = " ".join(
+                    el_addr.find_next("p").get_text(strip=True, separator=",").split()
+                )
+                phone = store.select_one("a[href*='tel:']").text.strip()
+                hours_of_operation = (
+                    store.find("h3", text=re.compile(r"Pharmacy Hours", flags=re.I))
+                    .find_next("div")
+                    .get_text(strip=True, separator=" ")
+                    .strip()
+                )
+            street_address, city, state, zip_postal = getAddress(raw_address)
+            country_code = "US"
+            yield SgRecord(
+                locator_domain=DOMAIN,
+                page_url=page_url,
+                location_name=location_name,
+                street_address=street_address,
+                city=city,
+                state=state,
+                zip_postal=zip_postal,
+                country_code=country_code,
+                phone=phone,
+                hours_of_operation=hours_of_operation,
+                raw_address=raw_address,
             )
-            latitude, longitude = text.split("/@")[1].split(",")[:2]
-        except IndexError:
-            latitude, longitude = SgRecord.MISSING, SgRecord.MISSING
 
-        _tmp = []
-        hours = tree.xpath("//dl/dt")
-        for h in hours:
-            day = "".join(h.xpath("./span[1]/text()")).strip()
-            inter = "".join(
-                h.xpath("./following-sibling::dd[1]/time/text()")
-            ).strip()
-            _tmp.append(f"{day} {inter}")
 
-        hours_of_operation = ";".join(_tmp)
-
-        row = SgRecord(
-            page_url=page_url,
-            location_name=location_name,
-            street_address=street_address,
-            city=city,
-            state=state,
-            zip_postal=postal,
-            country_code="US",
-            phone=phone,
-            latitude=latitude,
-            longitude=longitude,
-            locator_domain=locator_domain,
-            hours_of_operation=hours_of_operation,
-        )
-
-        sgw.write_row(row)
+def scrape():
+    log.info(f"start {DOMAIN} Scraper")
+    count = 0
+    with SgWriter(SgRecordDeduper(RecommendedRecordIds.StreetAddressId)) as writer:
+        results = fetch_data()
+        for rec in results:
+            writer.write_row(rec)
+            count = count + 1
+    log.info(f"No of records being processed: {count}")
+    log.info("Finished")
 
 
 if __name__ == "__main__":
-    locator_domain = "https://www.bluenile.com/"
-    log = SgLogSetup().get_logger(logger_name="bluenile.com")
-    with SgChrome(proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER, is_headless=False, response_successful=check_response) as fox:
-        with SgWriter(SgRecordDeduper(RecommendedRecordIds.PageUrlId)) as sgw:
-            fetch_data()
+    scrape()
