@@ -95,6 +95,6 @@ def scrape():
 
 if __name__ == "__main__":
     with SgChromeWithoutSeleniumWire(
-        is_headless=False, proxy_country="mx", response_successful=check_response, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
+        is_headless=False, proxy_country="mx", page_meets_expectations=check_response, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
     ) as driver:
         scrape()
