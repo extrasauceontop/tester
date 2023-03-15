@@ -51,8 +51,33 @@ def fetch_data():
     
     for code in all_codes:
         driver.get(post_url.format(code))
-        dom = etree.HTML(driver.page_source)
-        data = json.loads(dom.xpath("//pre/text()")[0])
+
+        data = driver.execute_async_script(
+            """
+            var done = arguments[0]
+            fetch("https://www.soriana.com/buscador-de-tiendas?update=true&isModal=false&radius=5.0&extendRadiusWhenSearchEmpty=true&lat=undefined&long=undefined&postalCode=01000", {
+                "headers": {
+                    "accept": "application/json, text/javascript, */*; q=0.01",
+                    "accept-language": "en-US,en;q=0.9",
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-origin",
+                    "x-requested-with": "XMLHttpRequest"
+                },
+                "referrer": "https://www.soriana.com/buscador-de-tiendas",
+                "referrerPolicy": "strict-origin-when-cross-origin",
+                "body": null,
+                "method": "GET",
+                "mode": "cors",
+                "credentials": "include"
+            })
+            .then(res => res.json())
+            .then(data => done(data))
+            """
+        )
+
+
         all_locations = data.get("stores", {}).get("stores")
         if not all_locations or len(all_locations) == 0:
             all_codes.found_nothing()
@@ -79,6 +104,7 @@ def fetch_data():
                 hours_of_operation="",
             )
             yield item
+        return
 
 
 def scrape():
