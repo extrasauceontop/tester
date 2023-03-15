@@ -52,6 +52,16 @@ def fetch_data():
     for code in all_codes:
         driver.get(post_url.format(code))
         log.info(driver.page_source)
+        try:
+            WebDriverWait(driver, 1).until(EC.alert_is_present(),
+                                        'Timed out waiting for PA creation ' +
+                                        'confirmation popup to appear.')
+
+            alert = driver.switch_to.alert
+            alert.accept()
+
+        except TimeoutException:
+            pass
         data = driver.execute_async_script(
             """
             var done = arguments[0]
@@ -77,8 +87,17 @@ def fetch_data():
             """
         )
 
+        try:
+            WebDriverWait(driver, 1).until(EC.alert_is_present(),
+                                        'Timed out waiting for PA creation ' +
+                                        'confirmation popup to appear.')
 
-        all_locations = data.get("stores", {}).get("stores")
+            alert = driver.switch_to.alert
+            alert.accept()
+
+        except TimeoutException:
+            pass
+        all_locations = data["stores"]
         if not all_locations or len(all_locations) == 0:
             all_codes.found_nothing()
             continue
