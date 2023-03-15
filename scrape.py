@@ -51,7 +51,7 @@ def fetch_data():
     
     for code in all_codes:
         driver.get(post_url.format(code))
-
+        log.info(driver.page_source)
         data = driver.execute_async_script(
             """
             var done = arguments[0]
