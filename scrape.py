@@ -1,6 +1,6 @@
 import json
 from lxml import etree
-from sgselenium.sgselenium import SgChrome
+from sgselenium.sgselenium import SgChromeWithoutSeleniumWire
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import SgRecordID
@@ -94,7 +94,7 @@ def scrape():
 
 
 if __name__ == "__main__":
-    with SgChrome(
+    with SgChromeWithoutSeleniumWire(
         is_headless=False, proxy_country="mx", response_successful=check_response, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
     ) as driver:
         scrape()
