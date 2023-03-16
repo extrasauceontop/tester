@@ -34,7 +34,7 @@ def get_stores():
                 },
                 "referrer": "https://www.banamex.com/es/assets/js/w-localizador.js",
                 "referrerPolicy": "strict-origin-when-cross-origin",
-                "body": '{"site":"5","entity":"bnmx_sucursales_summary","options":"tipo.numero=100,tipo.numero=110","quadrant":"19.429929399409083 -99.13532495498657 19.40742581330915 -99.11433935165405","logicalOperator":"OR","single":"true"}',
+                "body": '{"site":"5","entity":"bnmx_sucursales_summary","options":"tipo.numero=100,tipo.numero=110","quadrant":"32.6687 -117.1207 14.54 -86.7311","logicalOperator":"OR","single":"true"}',
                 "method": "POST",
                 "mode": "cors",
                 "credentials": "omit"
