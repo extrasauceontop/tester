@@ -9,7 +9,7 @@ from sgpostal.sgpostal import parse_address_intl
 from sgselenium import SgChromeWithoutSeleniumWire
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgscrape.sgrecord_deduper import SgRecordDeduper
-
+from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
 
 website = "hurley.com.au"
 log = sglog.SgLogSetup().get_logger(logger_name=website)
@@ -24,7 +24,7 @@ MISSING = SgRecord.MISSING
 def check_response(dresponse):
     if driver.current_url == "https://www.hurley.com.au/allstores":
         return True
-    time.sleep(20)
+    time.sleep(10)
     try:
         driver.page_source.split('"item":')[1].split("},")[0] + "}"
         return True
