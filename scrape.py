@@ -24,7 +24,7 @@ MISSING = SgRecord.MISSING
 def check_response(dresponse):
     if driver.current_url == "https://www.hurley.com.au/allstores":
         return True
-    time.sleep(10)
+    time.sleep(5)
     try:
         driver.page_source.split('"item":')[1].split("},")[0] + "}"
         return True
