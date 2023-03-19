@@ -1,4 +1,5 @@
 from sgselenium import SgChromeWithoutSeleniumWire
+import json
 
 url = "https://www.sprintersports.com/tiendas"
 with SgChromeWithoutSeleniumWire(is_headless=False) as driver:
@@ -26,8 +27,11 @@ with SgChromeWithoutSeleniumWire(is_headless=False) as driver:
             "mode": "cors",
             "credentials": "include"
         })
-        .then(res => res.text())
+        .then(res => res.json())
         .then(data => done(data))
         """
     )
+
+    with open("file.txt", "w", encoding="utf-8") as output:
+        print(data, file=output)
     print(data)
