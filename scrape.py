@@ -1,122 +1,62 @@
-import re
-import json
-import time
-from sglogging import sglog
-from bs4 import BeautifulSoup
-from sgscrape.sgwriter import SgWriter
+# -*- coding: utf-8 -*-
+from sgrequests import SgRequests
 from sgscrape.sgrecord import SgRecord
-from sgpostal.sgpostal import parse_address_intl
-from sgselenium import SgChromeWithoutSeleniumWire
-from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
-
-website = "hurley.com.au"
-log = sglog.SgLogSetup().get_logger(logger_name=website)
-headers = {
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-}
-
-locator_domain = "https://www.hurley.com.au"
-MISSING = SgRecord.MISSING
-
-
-def check_response(dresponse):
-    if driver.current_url == "https://www.hurley.com.au/allstores":
-        return True
-    time.sleep(5)
-    try:
-        driver.page_source.split('"item":')[1].split("},")[0] + "}"
-        return True
-
-    except Exception:
-        return False
-
-
-def get_parsed_address(raw_address):
-    pa = parse_address_intl(raw_address)
-    street_address = filter(lambda x: x, [pa.street_address_1, pa.street_address_2])
-    street_address = ", ".join(street_address)
-    street_address = street_address if street_address else MISSING
-    city = pa.city
-    city = city.strip() if city else MISSING
-    state = pa.state
-    state = state.strip() if state else MISSING
-    zip_postal = pa.postcode
-    zip_postal = zip_postal.strip() if zip_postal else MISSING
-    return street_address, city, state, zip_postal
-
-
-def get_store_data(page_url):
-
-    driver.get(page_url)
-
-    temp = driver.page_source.split('"item":')[1].split("},")[0] + "}"
-    temp = json.loads(temp)
-    latitude = temp.get("latitude")
-    longitude = temp.get("longitude")
-    location_type = temp.get("store_type")
-    store_number = temp.get("entity_id")
-    return latitude, longitude, store_number, location_type
+from sgscrape.sgrecord_id import SgRecordID
+from sgscrape.sgwriter import SgWriter
 
 
 def fetch_data():
-    pattern = re.compile(r"\s\s+")
-    store_locator = "https://www.hurley.com.au/allstores"
-    driver.get(store_locator)
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    loclist = soup.find("div", {"class": "all-stores-list"}).findAll("li")
-    print(len(loclist))
-    for loc in loclist:
-        temp = loc.find("a")
-        location_name = temp.text
-        page_url = temp["href"]
-        log.info(page_url)
-        raw_address = loc.find("address").get_text(separator="|", strip=True).split("|")
-        if "(" in raw_address[-1]:
-            phone = raw_address[-1]
-            raw_address = "".join(raw_address[:-1])
-        else:
-            phone = MISSING
-            raw_address = "".join(raw_address)
-        raw_address = re.sub(pattern, "\n", raw_address).replace("\n", " ")
-        latitude, longitude, store_number, location_type = get_store_data(page_url)
-        street_address, city, state, zip_postal = get_parsed_address(raw_address)
-        country_code = "AU"
-        yield SgRecord(
-            locator_domain=locator_domain,
-            page_url=page_url,
-            location_name=location_name,
-            street_address=street_address,
-            city=city,
-            state=state,
-            zip_postal=zip_postal,
-            country_code=country_code,
-            store_number=store_number,
-            phone=phone,
-            location_type=location_type,
-            latitude=latitude,
-            longitude=longitude,
-            hours_of_operation=MISSING,
-            raw_address=raw_address,
-        )
+    start_url = "https://www.sprintersports.com/api/store/by_points"
+    domain = "sprintersports.com"
+    hdr = {
+        "accept": "application/json, text/plain, */*",
+        "content-type": "application/json;charset=UTF-8",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+    }
+
+    with SgRequests() as session:
+        frm = {
+            "p1x": -49.16087237499999,
+            "p1y": 27.18198667733388,
+            "p2x": 47.694596375,
+            "p2y": 47.846820320278624,
+            "clat": 38.2430516,
+            "clon": -0.733138,
+            "market": 1,
+        }
+        data = session.post(start_url, headers=hdr, json=frm).json()
+
+        for poi in data["stores"]:
+            page_url = "https://" + poi["url"]
+
+            item = SgRecord(
+                locator_domain=domain,
+                page_url=page_url,
+                location_name=poi["name"],
+                street_address=poi["address"],
+                city=poi["city"],
+                state=poi["province"],
+                zip_postal=poi["zip"],
+                country_code=poi["country"],
+                store_number=poi["id_point"],
+                phone=poi["phone"],
+                location_type="",
+                latitude=poi["latitude"],
+                longitude=poi["longitude"],
+                hours_of_operation="",
+            )
+
+            yield item
 
 
 def scrape():
-    log.info("Started")
-    count = 0
     with SgWriter(
-        deduper=SgRecordDeduper(record_id=RecommendedRecordIds.PageUrlId)
+        SgRecordDeduper(SgRecordID({SgRecord.Headers.STORE_NUMBER}))
     ) as writer:
-        results = fetch_data()
-        for rec in results:
-            writer.write_row(rec)
-            count = count + 1
-
-    log.info(f"No of records being processed: {count}")
-    log.info("Finished")
+        for item in fetch_data():
+            writer.write_row(item)
 
 
 if __name__ == "__main__":
-    with SgChromeWithoutSeleniumWire(page_meets_expectations=check_response) as driver:
-        scrape()
+    scrape()
