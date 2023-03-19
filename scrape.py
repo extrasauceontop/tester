@@ -26,7 +26,7 @@ def fetch_data():
             "market": 1,
         }
         data_stuff = session.post(start_url, headers=hdr, json=frm)
-        print(data.response.text)
+        print(data_stuff.response.text)
 
         data = data_stuff.json()
         for poi in data["stores"]:
