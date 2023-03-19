@@ -25,7 +25,7 @@ def fetch_data():
             "clon": -0.733138,
             "market": 1,
         }
-        data_stuff = session.post(start_url, headers=hdr, json=frm).json()
+        data_stuff = session.post(start_url, headers=hdr, json=frm)
         print(data.response.text)
 
         data = data_stuff.json()
