@@ -1,123 +1,133 @@
-from sgrequests import SgRequests
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from sgselenium import SgChrome
 from bs4 import BeautifulSoup as bs
-import re
-from sgzip.dynamic import DynamicZipSearch, SearchableCountries, Grain_2
-from sgscrape import simple_scraper_pipeline as sp
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-from sglogging import SgLogSetup
-from proxyfier import ProxyProviders
+from sgscrape import simple_scraper_pipeline as sp
+from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
+from sglogging import sglog
 
-logger = SgLogSetup().get_logger("crawl")
+
+def set_last_10():
+    log.info("setting 10")
+    recent_locs = crawl_state.get_misc_value("recent_locs")
+    for url_to_push in recent_locs:
+        log.info("setting URL: " + url_to_push)
+        crawl_state.push_request(SerializableRequest(url=url_to_push))
+
+
+def get_urls():
+    start_url = "https://www.primerica.com/public/locations.html"
+
+    driver.get(start_url)
+    response = driver.page_source
+
+    soup = bs(response, "html.parser")
+    country_divs = soup.find_all(
+        "div", attrs={"class": "Grid Grid--gutters Grid--cols-4 span4"}
+    )
+
+    for country_div in country_divs:
+        state_links = [
+            "https://www.primerica.com/public/" + a_tag["href"]
+            for a_tag in country_div.find_all("a")
+        ]
+
+        for state_link in state_links:
+            url_to_push = state_link
+            log.info("Pushing state URL: " + url_to_push)
+            crawl_state.push_request(SerializableRequest(url=url_to_push))
+
+    crawl_state.set_misc_value("got_urls", True)
 
 
 def get_data():
-    search = DynamicZipSearch(
-        country_codes=[SearchableCountries.BRITAIN], expected_search_radius_miles=15
-    )
+    most_recent_locs = []
+    for url_thing in crawl_state.request_stack_iter():
+        state_link = url_thing.url
 
-    with SgRequests(proxy_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as session:
-        for zip_code in search:
-            search.found_nothing()
-            found = 0
-            url = (
-                "https://www.salvationarmy.org.uk/map-page?near%5Bvalue%5D="
-                + str(zip_code)
-                + "&near%5Bdistance%5D%5Bfrom%5D=40.22"
+        most_recent_locs.append(state_link)
+        if len(most_recent_locs) > 3:
+            most_recent_locs = most_recent_locs[-3:]
+            crawl_state.set_misc_value("got_last_ten", True)
+            crawl_state.set_misc_value("recent_locs", most_recent_locs)
+
+        log.info("Scraping state URL: " + state_link)
+        driver.get(state_link)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "zip-list"))
+        )
+        state_soup = bs(driver.page_source, "html.parser")
+        for a_tag in state_soup.find("ul", attrs={"class": "zip-list"}).find_all("a"):
+            zipp_link = "https://www.primerica.com" + a_tag["href"]
+            log.info("Scraping zip URL: " + zipp_link)
+            driver.get(zipp_link)
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "agent-list"))
             )
-            logger.info(
-                f"Getting ready to parse zipcode {str(zip_code)}\nUrl:\n{str(url)}"
-            )
-            response_stuff = session.get(url)
-            try:
-                response = response_stuff.text
-            
-            except Exception:
-                with open("file.txt", "w", encoding="utf-8") as output:
-                    print(response.response.text, file=output)
-                raise Exception
-
-            soup = bs(response, "html.parser")
-
-            grids = soup.find_all(
-                "div", attrs={"class": "geolocation-location js-hide"}
-            )
-            x = 0
-            for grid in grids:
-                locator_domain = "salvationarmy.org.uk"
-
-                page_url = (
-                    "salvationarmy.org.uk" + grid.find_all("p")[-1].find("a")["href"]
+            zipp_soup = bs(driver.page_source, "html.parser")
+            agent_links = [
+                a_tag["href"]
+                for a_tag in zipp_soup.find(
+                    "ul", attrs={"class": "agent-list"}
+                ).find_all("a")
+            ]
+            if len(agent_links) == 0:
+                log.info("retrying zipp link: " + zipp_link)
+                driver.get("https://www.primerica.com/public/locations.html")
+                driver.get(state_link)
+                driver.get(zipp_link)
+                WebDriverWait(driver, 20).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "agent-list"))
                 )
-                logger.info(f"Currently parsing {str(page_url)}")
-                country_code = "UK"
-
-                location_name = grid.find(
-                    "p", attrs={"class": "field-content title"}
-                ).text.strip()
+                zipp_soup = bs(driver.page_source, "html.parser")
+                agent_links = [
+                    a_tag["href"]
+                    for a_tag in zipp_soup.find(
+                        "ul", attrs={"class": "agent-list"}
+                    ).find_all("a")
+                ]
+                if len(agent_links) == 0:
+                    log.info(driver.page_source)
+            for agent_link in agent_links:
+                log.info("Scraping agent link: " + agent_link)
+                locator_domain = "http://www.primerica.com/"
+                latitude = SgRecord.MISSING
+                longitude = SgRecord.MISSING
+                store_number = SgRecord.MISSING
+                location_type = SgRecord.MISSING
+                hours = SgRecord.MISSING
+                driver.get(agent_link)
                 try:
-                    full_address = grid.find(
-                        "p", attrs={"class": "address"}
-                    ).text.strip()
-                    full_address = full_address.split("\n")
-                    full_address = [item.strip() for item in full_address]
-
-                    address = full_address[0]
-
-                    city_zipp = (
-                        full_address[1].replace("  ", " ").replace(",", "").split(" ")
+                    WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, "divResumeName"))
                     )
-
-                    city = ""
-                    zipp = ""
-
-                    for item in city_zipp:
-                        if re.search(r"\d", item) is None:
-                            city = city + " " + item
-                        else:
-                            zipp = zipp + " " + item
-
-                    zipp = zipp.strip()
-                    city = city.strip()
                 except Exception:
-                    logger.error("Failed to parse address, here's grid\n{str(grid)}")
-                    address = None
-                    city = None
-                    zipp = None
-                latitude = grid["data-lat"]
-                longitude = grid["data-lng"]
+                    continue
+                agent_response = driver.page_source
+                agent_soup = bs(agent_response, "html.parser")
+                page_url = agent_link
+                location_name = agent_soup.find(
+                    "div", attrs={"class": "divResumeName"}
+                ).text.strip()
+                city = agent_response.split('addressCity  = "')[1].split('"')[0]
+                address_1 = agent_response.split('addressLine1 = "')[1].split('"')[0]
+                address_2 = agent_response.split('addressLine2 = "')[1].split('"')[0]
 
-                state = "<MISSING>"
+                address = (address_1 + " " + address_2).strip()
+                state = agent_response.split('addressState = "')[1].split('"')[0]
+                zipp = agent_response.split('var addressZip =  "')[1].split('"')[0]
+                phone = agent_response.split('"telephone" : "')[1].split('"')[0]
 
-                phone_list = grid.find("a").text.strip()
-                phone = ""
-                for item in phone_list:
-                    if re.search(r"\d", item) is not None:
-                        phone = phone + item
-                    if len(phone) == 11:
-                        break
+                if zipp.isdigit():
+                    country_code = "US"
 
-                if phone == "":
-                    phone = "<MISSING>"
-
-                hours = "<MISSING>"
-
-                store_number = grid["id"]
-                try:
-                    location_type = (
-                        grid["data-icon"].split("/")[-1].split(".")[0].split("_")[0]
-                    )
-                    if location_type == "corps":
-                        location_type = "Church"
-                except Exception as e:
-                    logger.error(
-                        f"Couldn't parse loctype, here's tag \n {str(grid)}", exc_info=e
-                    )
-                # search.found_location_at(latitude, longitude)
-                found += 1
-                x = x + 1
+                else:
+                    country_code = "CA"
 
                 yield {
                     "locator_domain": locator_domain,
@@ -125,21 +135,25 @@ def get_data():
                     "location_name": location_name,
                     "latitude": latitude,
                     "longitude": longitude,
-                    "city": city if city else "<MISSING>",
+                    "city": city,
+                    "street_address": address,
+                    "state": state,
+                    "zip": zipp,
                     "store_number": store_number,
-                    "street_address": address if address else "<MISSING>",
-                    "state": state if state else "<MISSING>",
-                    "zip": zipp if zipp else "<MISSING>",
                     "phone": phone,
                     "location_type": location_type,
                     "hours": hours,
                     "country_code": country_code,
                 }
-            if found == 0:
-                search.found_nothing()
 
 
 def scrape():
+    if not crawl_state.get_misc_value("got_urls"):
+        get_urls()
+
+    if crawl_state.get_misc_value("got_last_ten"):
+        set_last_10()
+
     field_defs = sp.SimpleScraperPipeline.field_definitions(
         locator_domain=sp.MappingField(mapping=["locator_domain"]),
         page_url=sp.MappingField(mapping=["page_url"]),
@@ -149,9 +163,7 @@ def scrape():
         street_address=sp.MultiMappingField(
             mapping=["street_address"], is_required=False
         ),
-        city=sp.MappingField(
-            mapping=["city"],
-        ),
+        city=sp.MappingField(mapping=["city"], is_required=False),
         state=sp.MappingField(mapping=["state"], is_required=False),
         zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
         country_code=sp.MappingField(mapping=["country_code"]),
@@ -165,12 +177,11 @@ def scrape():
         deduper=SgRecordDeduper(
             SgRecordID(
                 {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.LOCATION_TYPE,
+                    SgRecord.Headers.PAGE_URL,
+                    SgRecord.Headers.LOCATION_NAME,
                 }
             ),
-            duplicate_streak_failure_factor=-1,
+            duplicate_streak_failure_factor=100,
         )
     ) as writer:
         pipeline = sp.SimpleScraperPipeline(
@@ -183,4 +194,7 @@ def scrape():
 
 
 if __name__ == "__main__":
-    scrape()
+    log = sglog.SgLogSetup().get_logger(logger_name="primerica")
+    with SgChrome() as driver:
+        crawl_state = CrawlStateSingleton.get_instance()
+        scrape()
