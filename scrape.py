@@ -167,10 +167,7 @@ def scrape():
                 {
                     SgRecord.Headers.LATITUDE,
                     SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.CITY,
-                    SgRecord.Headers.STATE,
                     SgRecord.Headers.LOCATION_TYPE,
-                    SgRecord.Headers.STORE_NUMBER
                 }
             ),
             duplicate_streak_failure_factor=-1,
