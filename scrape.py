@@ -93,7 +93,11 @@ def get_data():
                 ]
                 if len(agent_links) == 0:
                     log.info(driver.page_source)
+            already_searched = []
             for agent_link in agent_links:
+                if agent_link in already_searched:
+                    continue
+                already_searched.append(agent_link)
                 log.info("Scraping agent link: " + agent_link)
                 locator_domain = "http://www.primerica.com/"
                 latitude = SgRecord.MISSING
