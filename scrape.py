@@ -199,6 +199,6 @@ def scrape():
 
 if __name__ == "__main__":
     log = sglog.SgLogSetup().get_logger(logger_name="primerica")
-    with SgChrome(driver_wait_timeout=20) as driver:
+    with SgChrome(driver_wait_timeout=10) as driver:
         crawl_state = CrawlStateSingleton.get_instance()
         scrape()
