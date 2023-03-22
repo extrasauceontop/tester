@@ -10,6 +10,7 @@ from sgscrape.sgrecord_id import SgRecordID
 from sgscrape import simple_scraper_pipeline as sp
 from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
 from sglogging import sglog
+from proxyfier import ProxyProviders
 
 
 def set_last_10():
@@ -199,6 +200,6 @@ def scrape():
 
 if __name__ == "__main__":
     log = sglog.SgLogSetup().get_logger(logger_name="primerica")
-    with SgChrome(driver_wait_timeout=10) as driver:
+    with SgChrome(driver_wait_timeout=10, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
         crawl_state = CrawlStateSingleton.get_instance()
         scrape()
