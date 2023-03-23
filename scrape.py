@@ -28,8 +28,8 @@ url = "https://dominos.by/api/web/pages?path=%2Frestaurants"
 with SgChrome(
     is_headless=False,
     block_third_parties=False,
-    proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-{}:{}@proxy.apify.com:8000/"],
-    # proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER,
+    # proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-{}:{}@proxy.apify.com:8000/"],
+    proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER,
     proxy_country="BY",
     response_successful=check_response) as driver:
     time.sleep(10)
