@@ -1,205 +1,41 @@
-from selenium.webdriver.common.by import By
+from sgselenium import SgChrome
+from proxyfier import ProxyProviders
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from sgselenium import SgChrome
-from bs4 import BeautifulSoup as bs
-from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgscrape.sgrecord import SgRecord
-from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord_id import SgRecordID
-from sgscrape import simple_scraper_pipeline as sp
-from sgscrape.pause_resume import CrawlStateSingleton, SerializableRequest
-from sglogging import sglog
-from proxyfier import ProxyProviders
+from selenium.common.exceptions import TimeoutException
+import time
 
 
-def set_last_10():
-    log.info("setting 10")
-    recent_locs = crawl_state.get_misc_value("recent_locs")
-    for url_to_push in recent_locs:
-        log.info("setting URL: " + url_to_push)
-        crawl_state.push_request(SerializableRequest(url=url_to_push))
+def check_response(dresponse):
+    time.sleep(10)
+    try:
+        WebDriverWait(driver, 3).until(EC.alert_is_present(),
+                                    'Timed out waiting for PA creation ' +
+                                    'confirmation popup to appear.')
+
+        alert = driver.switch_to.alert
+        alert.accept()
+        print("alert accepted")
+    except TimeoutException:
+        print("no alert")
+    if "Checking if the site connection is secure" in driver.page_source:
+        return False
+    
+    return True
 
 
-def get_urls():
-    start_url = "https://www.primerica.com/public/locations.html"
-
-    driver.get(start_url)
+url = "https://dominos.by/api/web/pages?path=%2Frestaurants"
+with SgChrome(
+    is_headless=False,
+    block_third_parties=False,
+    proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-{}:{}@proxy.apify.com:8000/"],
+    # proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER,
+    proxy_country="BY",
+    response_successful=check_response) as driver:
+    time.sleep(10)
+    driver.get(url)
+    time.sleep(10)
     response = driver.page_source
 
-    soup = bs(response, "html.parser")
-    country_divs = soup.find_all(
-        "div", attrs={"class": "Grid Grid--gutters Grid--cols-4 span4"}
-    )
-
-    for country_div in country_divs:
-        state_links = [
-            "https://www.primerica.com/public/" + a_tag["href"]
-            for a_tag in country_div.find_all("a")
-        ]
-
-        for state_link in state_links:
-            url_to_push = state_link
-            log.info("Pushing state URL: " + url_to_push)
-            crawl_state.push_request(SerializableRequest(url=url_to_push))
-
-    crawl_state.set_misc_value("got_urls", True)
-
-
-def get_data():
-    most_recent_locs = []
-    for url_thing in crawl_state.request_stack_iter():
-        state_link = url_thing.url
-
-        most_recent_locs.append(state_link)
-        if len(most_recent_locs) > 3:
-            most_recent_locs = most_recent_locs[-3:]
-            crawl_state.set_misc_value("got_last_ten", True)
-            crawl_state.set_misc_value("recent_locs", most_recent_locs)
-
-        log.info("Scraping state URL: " + state_link)
-        driver.get(state_link)
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "zip-list"))
-        )
-        state_soup = bs(driver.page_source, "html.parser")
-        for a_tag in state_soup.find("ul", attrs={"class": "zip-list"}).find_all("a"):
-            zipp_link = "https://www.primerica.com" + a_tag["href"]
-            log.info("Scraping zip URL: " + zipp_link)
-            driver.get(zipp_link)
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "agent-list"))
-            )
-            zipp_soup = bs(driver.page_source, "html.parser")
-            agent_links = [
-                a_tag["href"]
-                for a_tag in zipp_soup.find(
-                    "ul", attrs={"class": "agent-list"}
-                ).find_all("a")
-            ]
-            if len(agent_links) == 0:
-                log.info("retrying zipp link: " + zipp_link)
-                driver.get("https://www.primerica.com/public/locations.html")
-                driver.get(state_link)
-                driver.get(zipp_link)
-                WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "agent-list"))
-                )
-                zipp_soup = bs(driver.page_source, "html.parser")
-                agent_links = [
-                    a_tag["href"]
-                    for a_tag in zipp_soup.find(
-                        "ul", attrs={"class": "agent-list"}
-                    ).find_all("a")
-                ]
-                if len(agent_links) == 0:
-                    log.info(driver.page_source)
-            already_searched = []
-            for agent_link in agent_links:
-                if agent_link in already_searched:
-                    continue
-                already_searched.append(agent_link)
-                log.info("Scraping agent link: " + agent_link)
-                locator_domain = "http://www.primerica.com/"
-                latitude = SgRecord.MISSING
-                longitude = SgRecord.MISSING
-                store_number = SgRecord.MISSING
-                location_type = SgRecord.MISSING
-                hours = SgRecord.MISSING
-                driver.get(agent_link)
-                try:
-                    WebDriverWait(driver, 20).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "divResumeName"))
-                    )
-                except Exception:
-                    continue
-                agent_response = driver.page_source
-                agent_soup = bs(agent_response, "html.parser")
-                page_url = agent_link
-                location_name = agent_soup.find(
-                    "div", attrs={"class": "divResumeName"}
-                ).text.strip()
-                city = agent_response.split('addressCity  = "')[1].split('"')[0]
-                address_1 = agent_response.split('addressLine1 = "')[1].split('"')[0]
-                address_2 = agent_response.split('addressLine2 = "')[1].split('"')[0]
-
-                address = (address_1 + " " + address_2).strip()
-                state = agent_response.split('addressState = "')[1].split('"')[0]
-                zipp = agent_response.split('var addressZip =  "')[1].split('"')[0]
-                phone = agent_response.split('"telephone" : "')[1].split('"')[0]
-
-                if zipp.isdigit():
-                    country_code = "US"
-
-                else:
-                    country_code = "CA"
-
-                yield {
-                    "locator_domain": locator_domain,
-                    "page_url": page_url,
-                    "location_name": location_name,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "city": city,
-                    "street_address": address,
-                    "state": state,
-                    "zip": zipp,
-                    "store_number": store_number,
-                    "phone": phone,
-                    "location_type": location_type,
-                    "hours": hours,
-                    "country_code": country_code,
-                }
-
-
-def scrape():
-    if not crawl_state.get_misc_value("got_urls"):
-        get_urls()
-
-    if crawl_state.get_misc_value("got_last_ten"):
-        set_last_10()
-
-    field_defs = sp.SimpleScraperPipeline.field_definitions(
-        locator_domain=sp.MappingField(mapping=["locator_domain"]),
-        page_url=sp.MappingField(mapping=["page_url"]),
-        location_name=sp.MappingField(mapping=["location_name"]),
-        latitude=sp.MappingField(mapping=["latitude"]),
-        longitude=sp.MappingField(mapping=["longitude"]),
-        street_address=sp.MultiMappingField(
-            mapping=["street_address"], is_required=False
-        ),
-        city=sp.MappingField(mapping=["city"], is_required=False),
-        state=sp.MappingField(mapping=["state"], is_required=False),
-        zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
-        country_code=sp.MappingField(mapping=["country_code"]),
-        phone=sp.MappingField(mapping=["phone"], is_required=False),
-        store_number=sp.MappingField(mapping=["store_number"]),
-        hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
-        location_type=sp.MappingField(mapping=["location_type"], is_required=False),
-    )
-
-    with SgWriter(
-        deduper=SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.PAGE_URL,
-                    SgRecord.Headers.LOCATION_NAME,
-                }
-            ),
-            duplicate_streak_failure_factor=100,
-        )
-    ) as writer:
-        pipeline = sp.SimpleScraperPipeline(
-            scraper_name="Crawler",
-            data_fetcher=get_data,
-            field_definitions=field_defs,
-            record_writer=writer,
-        )
-        pipeline.run()
-
-
-if __name__ == "__main__":
-    log = sglog.SgLogSetup().get_logger(logger_name="primerica")
-    with SgChrome(driver_wait_timeout=10, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
-        crawl_state = CrawlStateSingleton.get_instance()
-        scrape()
+# with open("file.txt", "w", encoding="utf-8") as output:
+print(response)
