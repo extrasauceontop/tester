@@ -126,5 +126,6 @@ if __name__ == "__main__":
             try:
                 scrape()
                 break
-            except Exception:
+            except Exception as e:
+                log.info(e)
                 continue
