@@ -5,7 +5,7 @@ from sglogging import sglog
 from bs4 import BeautifulSoup
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord import SgRecord
-from sgpostal.sgpostal import parse_address_intl
+# from sgpostal.sgpostal import parse_address_intl
 from sgselenium import SgChromeWithoutSeleniumWire
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgscrape.sgrecord_deduper import SgRecordDeduper
@@ -33,16 +33,20 @@ def check_response(dresponse):
 
 
 def get_parsed_address(raw_address):
-    pa = parse_address_intl(raw_address)
-    street_address = filter(lambda x: x, [pa.street_address_1, pa.street_address_2])
-    street_address = ", ".join(street_address)
-    street_address = street_address if street_address else MISSING
-    city = pa.city
-    city = city.strip() if city else MISSING
-    state = pa.state
-    state = state.strip() if state else MISSING
-    zip_postal = pa.postcode
-    zip_postal = zip_postal.strip() if zip_postal else MISSING
+    # pa = parse_address_intl(raw_address)
+    # street_address = filter(lambda x: x, [pa.street_address_1, pa.street_address_2])
+    # street_address = ", ".join(street_address)
+    # street_address = street_address if street_address else MISSING
+    # city = pa.city
+    # city = city.strip() if city else MISSING
+    # state = pa.state
+    # state = state.strip() if state else MISSING
+    # zip_postal = pa.postcode
+    # zip_postal = zip_postal.strip() if zip_postal else MISSING
+    street_address = "<MISSING>"
+    city = "<MISSING>"
+    state = "<MISSING>"
+    zip_postal = "<MISSING>"
     return street_address, city, state, zip_postal
 
 
@@ -117,15 +121,5 @@ def scrape():
 
 
 if __name__ == "__main__":
-    with SgChromeWithoutSeleniumWire(page_meets_expectations=check_response) as driver:
-        x = 0
-        while True:
-            x = x + 1
-            if x == 10:
-                raise Exception
-            try:
-                scrape()
-                break
-            except Exception as e:
-                log.info(e)
-                continue
+    with SgChromeWithoutSeleniumWire(page_meets_expectations=check_response, is_headless=False, proxy_country="au", eager_page_load_strategy=True) as driver:
+        scrape()
