@@ -1,125 +1,133 @@
-import re
-import json
-import time
-from sglogging import sglog
-from bs4 import BeautifulSoup
-from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord import SgRecord
-# from sgpostal.sgpostal import parse_address_intl
-from sgselenium import SgChromeWithoutSeleniumWire
-from sgscrape.sgrecord_id import RecommendedRecordIds
+from sgselenium import SgChrome
+from bs4 import BeautifulSoup as bs
 from sgscrape.sgrecord_deduper import SgRecordDeduper
-
-website = "hurley.com.au"
-log = sglog.SgLogSetup().get_logger(logger_name=website)
-headers = {
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-}
-counter = 0
-locator_domain = "https://www.hurley.com.au"
-MISSING = SgRecord.MISSING
+from sgscrape.sgrecord import SgRecord
+from sgscrape.sgwriter import SgWriter
+from sgscrape.sgrecord_id import SgRecordID
+from sgscrape import simple_scraper_pipeline as sp
+import json
 
 
-def check_response(dresponse):
-    if driver.current_url == "https://www.hurley.com.au/allstores":
-        return True
-    time.sleep(5)
-    try:
-        driver.page_source.split('"item":')[1].split("},")[0] + "}"
-        return True
+def extract_json(html_string):
+    json_objects = []
+    count = 0
 
-    except Exception:
-        return False
+    brace_count = 0
+    for element in html_string:
 
+        if element == "{":
+            brace_count = brace_count + 1
+            if brace_count == 1:
+                start = count
 
-def get_parsed_address(raw_address):
-    # pa = parse_address_intl(raw_address)
-    # street_address = filter(lambda x: x, [pa.street_address_1, pa.street_address_2])
-    # street_address = ", ".join(street_address)
-    # street_address = street_address if street_address else MISSING
-    # city = pa.city
-    # city = city.strip() if city else MISSING
-    # state = pa.state
-    # state = state.strip() if state else MISSING
-    # zip_postal = pa.postcode
-    # zip_postal = zip_postal.strip() if zip_postal else MISSING
-    street_address = "<MISSING>"
-    city = "<MISSING>"
-    state = "<MISSING>"
-    zip_postal = "<MISSING>"
-    return street_address, city, state, zip_postal
+        elif element == "}":
+            brace_count = brace_count - 1
+            if brace_count == 0:
+                end = count
+                try:
+                    json_objects.append(json.loads(html_string[start : end + 1]))
+                except Exception:
+                    pass
+        count = count + 1
+
+    return json_objects
 
 
-def get_store_data(page_url):
-
-    driver.get(page_url)
-
-    temp = driver.page_source.split('"item":')[1].split("},")[0] + "}"
-    temp = json.loads(temp)
-    latitude = temp.get("latitude")
-    longitude = temp.get("longitude")
-    location_type = temp.get("store_type")
-    store_number = temp.get("entity_id")
-    return latitude, longitude, store_number, location_type
-
-
-def fetch_data(counter):
-    pattern = re.compile(r"\s\s+")
+def get_data():
     store_locator = "https://www.hurley.com.au/allstores"
     driver.get(store_locator)
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    loclist = soup.find("div", {"class": "all-stores-list"}).findAll("li")[counter:]
-    for loc in loclist:
-        temp = loc.find("a")
-        location_name = temp.text
-        page_url = temp["href"]
-        log.info(page_url)
-        raw_address = loc.find("address").get_text(separator="|", strip=True).split("|")
-        if "(" in raw_address[-1]:
-            phone = raw_address[-1]
-            raw_address = "".join(raw_address[:-1])
-        else:
-            phone = MISSING
-            raw_address = "".join(raw_address)
-        raw_address = re.sub(pattern, "\n", raw_address).replace("\n", " ")
-        latitude, longitude, store_number, location_type = get_store_data(page_url)
-        street_address, city, state, zip_postal = get_parsed_address(raw_address)
-        country_code = "AU"
-        counter = counter + 1
-        yield SgRecord(
-            locator_domain=locator_domain,
-            page_url=page_url,
-            location_name=location_name,
-            street_address=street_address,
-            city=city,
-            state=state,
-            zip_postal=zip_postal,
-            country_code=country_code,
-            store_number=store_number,
-            phone=phone,
-            location_type=location_type,
-            latitude=latitude,
-            longitude=longitude,
-            hours_of_operation=MISSING,
-            raw_address=raw_address,
-        )
+    soup = bs(driver.page_source, "html.parser")
+
+    page_urls = [li_tag.find("a")["href"] for li_tag in soup.find("div", {"class": "all-stores-list"}).find_all("li")]
+    for page_url in page_urls:
+        print(page_url)
+        driver.get(page_url)
+        response = driver.page_source
+        soup = bs(response, "html.parser")
+        locator_domain = "hurley.com.au"
+        location_name = soup.find("title").text.strip()
+        
+        location = extract_json(response.split('"item":')[1])[0]
+        with open("file.txt", "w", encoding="utf-8") as output:
+            json.dump(location, output, indent=4)
+
+        latitude = location["latitude"]
+        longitude = location["longitude"]
+        city = location["city"]
+        state = location["state"]
+        
+        address = (str(location.get("shop_no_unit")) + " " + str(location.get("street")) + " " + str(location.get("street_type"))).replace("None", "").strip()
+        while "  " in address:
+            address = address.replace("  ", " ")
+        zipp = location["postcode"]
+        store_number = location["entity_id"]
+        phone = location["phone_number"] if location.get("phone_number") is not None else "<MISSING>"
+        location_type = location["store_type"]
+        hours = "<MISSING>"
+        country_code = location["country"]
+
+        yield {
+            "locator_domain": locator_domain,
+            "page_url": page_url,
+            "location_name": location_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "city": city,
+            "street_address": address,
+            "state": state,
+            "zip": zipp,
+            "store_number": store_number,
+            "phone": phone,
+            "location_type": location_type,
+            "hours": hours,
+            "country_code": country_code,
+        }
 
 
 def scrape():
-    log.info("Started")
-    count = 0
-    with SgWriter(
-        deduper=SgRecordDeduper(record_id=RecommendedRecordIds.PageUrlId)
-    ) as writer:
-        results = fetch_data(counter)
-        for rec in results:
-            writer.write_row(rec)
-            count = count + 1
+    field_defs = sp.SimpleScraperPipeline.field_definitions(
+        locator_domain=sp.MappingField(mapping=["locator_domain"]),
+        page_url=sp.MappingField(mapping=["page_url"]),
+        location_name=sp.MappingField(mapping=["location_name"]),
+        latitude=sp.MappingField(mapping=["latitude"]),
+        longitude=sp.MappingField(mapping=["longitude"]),
+        street_address=sp.MultiMappingField(
+            mapping=["street_address"], is_required=False
+        ),
+        city=sp.MappingField(
+            mapping=["city"],
+        ),
+        state=sp.MappingField(mapping=["state"], is_required=False),
+        zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
+        country_code=sp.MappingField(mapping=["country_code"]),
+        phone=sp.MappingField(mapping=["phone"], is_required=False),
+        store_number=sp.MappingField(mapping=["store_number"]),
+        hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
+        location_type=sp.MappingField(mapping=["location_type"], is_required=False),
+    )
 
-    log.info(f"No of records being processed: {count}")
-    log.info("Finished")
+    with SgWriter(
+        deduper=SgRecordDeduper(
+            SgRecordID(
+                {
+                    SgRecord.Headers.LATITUDE,
+                    SgRecord.Headers.LONGITUDE,
+                    SgRecord.Headers.PAGE_URL,
+                    SgRecord.Headers.LOCATION_NAME,
+                }
+            ),
+            duplicate_streak_failure_factor=100,
+        )
+    ) as writer:
+        pipeline = sp.SimpleScraperPipeline(
+            scraper_name="Crawler",
+            data_fetcher=get_data,
+            field_definitions=field_defs,
+            record_writer=writer,
+        )
+        pipeline.run()
 
 
 if __name__ == "__main__":
-    with SgChromeWithoutSeleniumWire(page_meets_expectations=check_response, is_headless=False, proxy_country="au", eager_page_load_strategy=True) as driver:
+    with SgChrome(is_headless=False, eager_page_load_strategy=True) as driver:
         scrape()
