@@ -118,8 +118,11 @@ def get_data():
             addr = parse_address_intl(address_parts)
             city = addr.city
             address = address_parts.split(city)[0].strip()
-            if address[-1] == ",":
-                address = address[:-1]
+            try:
+                if address[-1] == ",":
+                    address = address[:-1]
+            except Exception:
+                address = "<MISSING>"
 
             yield {
                 "locator_domain": locator_domain,
