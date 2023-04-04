@@ -6,6 +6,7 @@ from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
+from proxyfier import ProxyProviders
 
 
 def get_data():
@@ -22,7 +23,7 @@ def get_data():
     )
     url = "https://www.weldom.fr/"
     days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    with SgFirefox(proxy_country="fr", response_successful=check_response) as driver:
+    with SgFirefox(proxy_country="fr", response_successful=check_response, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
         driver.get(url)
         for search_lat, search_lon in search:
             x = 0
