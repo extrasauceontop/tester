@@ -1,155 +1,125 @@
-from sgrequests import SgRequests
-import random
+from sgselenium import SgFirefox
 from sgscrape import simple_scraper_pipeline as sp
-from tenacity import retry, stop_after_attempt
-from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgscrape.sgrecord import SgRecord
-from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord_id import SgRecordID
-from sgpostal.sgpostal import parse_address_intl
-
-_headers = [
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 12_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/12.0 Mobile/15A372 Safari/604.1",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36 Edg/91.0.864.59",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36 OPR/77.0.4054.172",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.64",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.67",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.70",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 OPR/77.0.4054.203",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36 Edg/91.0.864.71",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.55",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:78.0) Gecko/20100101 Firefox/78.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:88.0) Gecko/20100101 Firefox/88.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0",
-    "Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0",
-    "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0",
-    "Mozilla/5.0 (X11; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (X11; Linux x86_64; rv:90.0) Gecko/20100101 Firefox/90.0",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:90.0) Gecko/20100101 Firefox/90.0",
-]
-
-locator_domain = "https://www.7eleven.co.th"
-base_url = "https://7eleven-api-prod.jenosize.tech/v1/Store/GetStoreBySearch"
-
-
-@retry(stop=stop_after_attempt(7))
-def get_locs(data):
-    locations = []
-    locations = session.post(
-        base_url,
-        headers={"user-agent": random.choices(_headers)[0]},
-        json=data,
-    ).json()["data"]
-
-    return locations
+import unidecode
+from sgzip.dynamic import DynamicGeoSearch, SearchableCountries, Grain_4
 
 
 def get_data():
-    for x in range(10000):
+    def check_response(response):
+        if "Please enable JS and disable any ad blocker" in driver.page_source:
+            return False
 
-        data = {"keyword": str(x), "products": []}
-        locations = get_locs(data)
+        else:
+            return True
 
-        for store in locations:
-            try:
-                address = store["address"]
-            except Exception:
-                continue
-            if store.get("province"):
-                address = store["address"].replace(store["province"], "").strip()
-            phone = store["tel"].split()[0].split(",")[0] if store.get("tel") else ""
-            latitude = str(store["lat"])
-            longitude = str(store["lng"])
+    search = DynamicGeoSearch(
+        country_codes=[SearchableCountries.FRANCE],
+        granularity=Grain_4(),
+    )
+    url = "https://www.weldom.fr/"
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    with SgFirefox(proxy_country="fr", response_successful=check_response) as driver:
+        driver.get(url)
+        for search_lat, search_lon in search:
+            x = 0
+            while True:
+                x = x + 1
+                if x == 10:
+                    raise Exception
+                try:
+                    data = driver.execute_async_script(
+                        """
+                        var done = arguments[0]
+                        fetch("https://www.weldom.fr/graphql?query=query($gps_coordinate:GpsCoordinatesFilter){storeList(gps_coordinate:$gps_coordinate){id+name+meta_description+meta_title+seller_code+distance+contact_phone+url_key+address{city+latitude+longitude+country_id+postcode+region+region_id+street}image+opening_hours{day_of_week+slots{start_time+end_time}}special_opening_hours{day+slots{start_time+end_time}}is_available_for_cart+ereservation+eresa_without_stock+online_payment+messages{title+message+link+label_link}week{days{datetime+slots{start_time+end_time}}}}}&operationName=storeList&variables={%22gps_coordinate%22:{%22latitude%22:"""
+                        + str(search_lat)
+                        + """,%22longitude%22:"""
+                        + str(search_lon)
+                        + """}}", {
+                            "headers": {
+                                "accept": "application/json, text/plain, */*",
+                                "accept-language": "en-US,en;q=0.9",
+                                "sec-ch-ua-mobile": "?0",
+                                "sec-fetch-dest": "empty",
+                                "sec-fetch-mode": "cors",
+                                "sec-fetch-site": "same-origin"
+                            },
+                            "referrerPolicy": "no-referrer",
+                            "body": null,
+                            "method": "GET",
+                            "mode": "cors",
+                            "credentials": "include"
+                        })
+                        .then(res => res.json())
+                        .then(data => done(data))
+                        """
+                    )
+                    data["data"]["storeList"]
+                    break
+                except Exception:
+                    driver.get(url)
 
-            try:
-                state = store["province"]
-            except Exception:
+            if len(data["data"]["storeList"]) == 0:
+                search.found_nothing()
+
+            for location in data["data"]["storeList"]:
+                locator_domain = "https://www.weldom.fr/"
+                page_url = "https://www.weldom.fr/magasin/" + str(location["id"])
+                location_name = location["name"]
+                latitude = location["address"]["latitude"]
+                longitude = location["address"]["longitude"]
+                search.found_location_at(latitude, longitude)
+                city = location["address"]["city"]
+                store_number = location["id"]
+                address = "".join(part + " " for part in location["address"]["street"])
                 state = "<MISSING>"
+                zipp = location["address"]["postcode"]
+                phone = location["contact_phone"].replace("+", "")
+                location_type = "<MISSING>"
+                country_code = "FR"
 
-            address_parts = store["address"]
-            addr = parse_address_intl(address_parts)
-            city = addr.city
-            address = address_parts.split(city)[0].strip()
-            try:
-                if address[-1] == ",":
-                    address = address[:-1]
-            except Exception:
-                address = "<MISSING>"
+                hours = ""
+                for x in range(len(days)):
+                    day = days[x]
+                    time_string = ""
+                    for part in location["opening_hours"][x]["slots"]:
+                        sta = part["start_time"]
+                        end = part["end_time"]
 
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": "https://www.7eleven.co.th/find-store",
-                "location_name": store["name"],
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": "<MISSING>",
-                "store_number": store["id"],
-                "street_address": address,
-                "state": state,
-                "zip": store["postcode"],
-                "phone": phone,
-                "location_type": "<MISSING>",
-                "hours": "<MISSING>",
-                "country_code": "TH",
-                "raw_address": store["address"],
-            }
+                        time_string = time_string + sta + " - " + end + "/"
+
+                    time_string = time_string[:-1]
+
+                    hours = hours + day + " " + time_string + ", "
+
+                hours = hours[:-2]
+
+                yield {
+                    "locator_domain": unidecode.unidecode(locator_domain),
+                    "page_url": unidecode.unidecode(page_url),
+                    "location_name": unidecode.unidecode(location_name),
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "city": unidecode.unidecode(city),
+                    "store_number": store_number,
+                    "street_address": unidecode.unidecode(address),
+                    "state": unidecode.unidecode(state),
+                    "zip": unidecode.unidecode(zipp),
+                    "phone": unidecode.unidecode(phone),
+                    "location_type": unidecode.unidecode(location_type),
+                    "hours": unidecode.unidecode(hours),
+                    "country_code": unidecode.unidecode(country_code),
+                }
 
 
 def scrape():
     field_defs = sp.SimpleScraperPipeline.field_definitions(
         locator_domain=sp.MappingField(mapping=["locator_domain"]),
-        page_url=sp.MappingField(mapping=["page_url"]),
-        location_name=sp.MappingField(mapping=["location_name"]),
-        latitude=sp.MappingField(mapping=["latitude"]),
-        longitude=sp.MappingField(mapping=["longitude"]),
+        page_url=sp.MappingField(mapping=["page_url"], is_required=False),
+        location_name=sp.MappingField(
+            mapping=["location_name"], part_of_record_identity=True
+        ),
+        latitude=sp.MappingField(mapping=["latitude"], part_of_record_identity=True),
+        longitude=sp.MappingField(mapping=["longitude"], part_of_record_identity=True),
         street_address=sp.MultiMappingField(
             mapping=["street_address"], is_required=False
         ),
@@ -160,37 +130,20 @@ def scrape():
         zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
         country_code=sp.MappingField(mapping=["country_code"]),
         phone=sp.MappingField(mapping=["phone"], is_required=False),
-        store_number=sp.MappingField(mapping=["store_number"]),
+        store_number=sp.MappingField(
+            mapping=["store_number"], part_of_record_identity=True
+        ),
         hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
         location_type=sp.MappingField(mapping=["location_type"], is_required=False),
-        raw_address=sp.MappingField(mapping=["raw_address"], is_required=False),
     )
 
-    with SgWriter(
-        deduper=SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.PAGE_URL,
-                    SgRecord.Headers.LOCATION_NAME,
-                }
-            ),
-            duplicate_streak_failure_factor=100,
-        )
-    ) as writer:
-        pipeline = sp.SimpleScraperPipeline(
-            scraper_name="Crawler",
-            data_fetcher=get_data,
-            field_definitions=field_defs,
-            record_writer=writer,
-        )
-        pipeline.run()
+    pipeline = sp.SimpleScraperPipeline(
+        scraper_name="Crawler",
+        data_fetcher=get_data,
+        field_definitions=field_defs,
+        log_stats_interval=15,
+    )
+    pipeline.run()
 
 
-if __name__ == "__main__":
-    with SgRequests(
-        proxy_country="th",
-        retries_with_fresh_proxy_ip=10,
-    ) as session:
-        scrape()
+scrape()
