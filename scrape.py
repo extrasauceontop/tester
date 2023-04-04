@@ -2,6 +2,10 @@ from sgselenium import SgFirefox
 from sgscrape import simple_scraper_pipeline as sp
 import unidecode
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries, Grain_4
+from sgscrape.sgrecord_deduper import SgRecordDeduper
+from sgscrape.sgrecord import SgRecord
+from sgscrape.sgwriter import SgWriter
+from sgscrape.sgrecord_id import SgRecordID
 
 
 def get_data():
@@ -114,12 +118,10 @@ def get_data():
 def scrape():
     field_defs = sp.SimpleScraperPipeline.field_definitions(
         locator_domain=sp.MappingField(mapping=["locator_domain"]),
-        page_url=sp.MappingField(mapping=["page_url"], is_required=False),
-        location_name=sp.MappingField(
-            mapping=["location_name"], part_of_record_identity=True
-        ),
-        latitude=sp.MappingField(mapping=["latitude"], part_of_record_identity=True),
-        longitude=sp.MappingField(mapping=["longitude"], part_of_record_identity=True),
+        page_url=sp.MappingField(mapping=["page_url"]),
+        location_name=sp.MappingField(mapping=["location_name"]),
+        latitude=sp.MappingField(mapping=["latitude"]),
+        longitude=sp.MappingField(mapping=["longitude"]),
         street_address=sp.MultiMappingField(
             mapping=["street_address"], is_required=False
         ),
@@ -130,20 +132,32 @@ def scrape():
         zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
         country_code=sp.MappingField(mapping=["country_code"]),
         phone=sp.MappingField(mapping=["phone"], is_required=False),
-        store_number=sp.MappingField(
-            mapping=["store_number"], part_of_record_identity=True
-        ),
+        store_number=sp.MappingField(mapping=["store_number"]),
         hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
         location_type=sp.MappingField(mapping=["location_type"], is_required=False),
     )
 
-    pipeline = sp.SimpleScraperPipeline(
-        scraper_name="Crawler",
-        data_fetcher=get_data,
-        field_definitions=field_defs,
-        log_stats_interval=15,
-    )
-    pipeline.run()
+    with SgWriter(
+        deduper=SgRecordDeduper(
+            SgRecordID(
+                {
+                    SgRecord.Headers.LATITUDE,
+                    SgRecord.Headers.LONGITUDE,
+                    SgRecord.Headers.PAGE_URL,
+                    SgRecord.Headers.LOCATION_NAME,
+                }
+            ),
+            duplicate_streak_failure_factor=100,
+        )
+    ) as writer:
+        pipeline = sp.SimpleScraperPipeline(
+            scraper_name="Crawler",
+            data_fetcher=get_data,
+            field_definitions=field_defs,
+            record_writer=writer,
+        )
+        pipeline.run()
 
 
-scrape()
+if __name__ == "__main__":
+    scrape()
