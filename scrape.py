@@ -1,124 +1,60 @@
-from sgselenium import SgChromeWithoutSeleniumWire
+from sgrequests import SgRequests
 from sgscrape import simple_scraper_pipeline as sp
-import unidecode
-from sgzip.dynamic import DynamicGeoSearch, SearchableCountries, Grain_4
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-from proxyfier import ProxyProviders
 
 
 def get_data():
-    def check_response(response):
-        if "Please enable JS and disable any ad blocker" in driver.page_source:
-            return False
+    session = SgRequests()
+    url = "https://api.momentfeed.com/v1/analytics/api/v2/llp/sitemap?auth_token=YNDRAXWGIEKBMEAP&country=US&multi_account=false"
+    response = session.get(url).json()
 
-        else:
-            return True
+    for location in response["locations"]:
+        locator_domain = "centers.consulatehealthcare.com"
+        page_url = "https://centers.consulatehealthcare.com" + location["llp_url"]
+        address = location["store_info"]["address"]
+        city = location["store_info"]["locality"]
+        state = location["store_info"]["region"]
+        zipp = location["store_info"]["postcode"]
+        location_type = "<MISSING>"
+        hours = "24/7"
+        country_code = location["store_info"]["country"]
 
-    search = DynamicGeoSearch(
-        country_codes=[SearchableCountries.FRANCE],
-        granularity=Grain_4(),
-    )
-    url = "https://www.weldom.fr/"
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    with SgChromeWithoutSeleniumWire(
-        proxy_country="fr",
-        page_meets_expectations=check_response,
-        proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER,
-        is_headless=False
-    ) as driver:
-        driver.get(url)
-        for search_lat, search_lon in search:
-            x = 0
-            while True:
-                x = x + 1
-                if x == 10:
-                    raise Exception
-                try:
-                    data = driver.execute_async_script(
-                        """
-                        var done = arguments[0]
-                        fetch("https://www.weldom.fr/graphql?query=query($gps_coordinate:GpsCoordinatesFilter){storeList(gps_coordinate:$gps_coordinate){id+name+meta_description+meta_title+seller_code+distance+contact_phone+url_key+address{city+latitude+longitude+country_id+postcode+region+region_id+street}image+opening_hours{day_of_week+slots{start_time+end_time}}special_opening_hours{day+slots{start_time+end_time}}is_available_for_cart+ereservation+eresa_without_stock+online_payment+messages{title+message+link+label_link}week{days{datetime+slots{start_time+end_time}}}}}&operationName=storeList&variables={%22gps_coordinate%22:{%22latitude%22:"""
-                        + str(search_lat)
-                        + """,%22longitude%22:"""
-                        + str(search_lon)
-                        + """}}", {
-                            "headers": {
-                                "accept": "application/json, text/plain, */*",
-                                "accept-language": "en-US,en;q=0.9",
-                                "sec-ch-ua-mobile": "?0",
-                                "sec-fetch-dest": "empty",
-                                "sec-fetch-mode": "cors",
-                                "sec-fetch-site": "same-origin"
-                            },
-                            "referrerPolicy": "no-referrer",
-                            "body": null,
-                            "method": "GET",
-                            "mode": "cors",
-                            "credentials": "include"
-                        })
-                        .then(res => res.json())
-                        .then(data => done(data))
-                        """
-                    )
-                    data["data"]["storeList"]
-                    break
-                except Exception:
-                    driver.get(url)
+        api_url = (
+            "https://api.momentfeed.com/v1/analytics/api/llp.json?address="
+            + address.replace(" ", "+")
+            + "&locality="
+            + city.replace(" ", "+")
+            + "&multi_account=false&pageSize=30&region="
+            + state
+            + "&auth_token=YNDRAXWGIEKBMEAP"
+        )
+        page_response = session.get(api_url).json()
 
-            if len(data["data"]["storeList"]) == 0:
-                search.found_nothing()
+        phone = page_response[0]["store_info"]["phone"]
+        location_name = page_response[0]["store_info"]["name"]
+        latitude = page_response[0]["store_info"]["latitude"]
+        longitude = page_response[0]["store_info"]["longitude"]
+        store_number = page_response[0]["store_info"]["corporate_id"]
 
-            for location in data["data"]["storeList"]:
-                locator_domain = "https://www.weldom.fr/"
-                page_url = "https://www.weldom.fr/magasin/" + str(location["id"])
-                location_name = location["name"]
-                latitude = location["address"]["latitude"]
-                longitude = location["address"]["longitude"]
-                search.found_location_at(latitude, longitude)
-                city = location["address"]["city"]
-                store_number = location["id"]
-                address = "".join(part + " " for part in location["address"]["street"])
-                state = "<MISSING>"
-                zipp = location["address"]["postcode"]
-                phone = location["contact_phone"].replace("+", "")
-                location_type = "<MISSING>"
-                country_code = "FR"
-
-                hours = ""
-                for x in range(len(days)):
-                    day = days[x]
-                    time_string = ""
-                    for part in location["opening_hours"][x]["slots"]:
-                        sta = part["start_time"]
-                        end = part["end_time"]
-
-                        time_string = time_string + sta + " - " + end + "/"
-
-                    time_string = time_string[:-1]
-
-                    hours = hours + day + " " + time_string + ", "
-
-                hours = hours[:-2]
-
-                yield {
-                    "locator_domain": unidecode.unidecode(locator_domain),
-                    "page_url": unidecode.unidecode(page_url),
-                    "location_name": unidecode.unidecode(location_name),
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "city": unidecode.unidecode(city),
-                    "store_number": store_number,
-                    "street_address": unidecode.unidecode(address),
-                    "state": unidecode.unidecode(state),
-                    "zip": unidecode.unidecode(zipp),
-                    "phone": unidecode.unidecode(phone),
-                    "location_type": unidecode.unidecode(location_type),
-                    "hours": unidecode.unidecode(hours),
-                    "country_code": unidecode.unidecode(country_code),
-                }
+        yield {
+            "locator_domain": locator_domain,
+            "page_url": page_url,
+            "location_name": location_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "city": city,
+            "store_number": store_number,
+            "street_address": address,
+            "state": state,
+            "zip": zipp,
+            "phone": phone,
+            "location_type": location_type,
+            "hours": hours,
+            "country_code": country_code,
+        }
 
 
 def scrape():
