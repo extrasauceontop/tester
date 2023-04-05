@@ -26,7 +26,8 @@ def get_data():
     with SgChromeWithoutSeleniumWire(
         proxy_country="fr",
         page_meets_expectations=check_response,
-        proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
+        proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER,
+        is_headless=False
     ) as driver:
         driver.get(url)
         for search_lat, search_lon in search:
