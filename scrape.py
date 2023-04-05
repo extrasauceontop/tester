@@ -1,4 +1,4 @@
-from sgselenium import SgFirefox
+from sgselenium import SgChromeWithoutSeleniumWire
 from sgscrape import simple_scraper_pipeline as sp
 import unidecode
 from sgzip.dynamic import DynamicGeoSearch, SearchableCountries, Grain_4
@@ -23,9 +23,9 @@ def get_data():
     )
     url = "https://www.weldom.fr/"
     days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    with SgFirefox(
+    with SgChromeWithoutSeleniumWire(
         proxy_country="fr",
-        response_successful=check_response,
+        page_meets_expectations=check_response,
         proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
     ) as driver:
         driver.get(url)
