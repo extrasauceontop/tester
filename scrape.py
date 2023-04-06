@@ -6,6 +6,7 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
 from sgscrape import simple_scraper_pipeline as sp
 from sgpostal.sgpostal import parse_address_intl
+import time
 
 
 def get_data():
@@ -37,6 +38,7 @@ def get_data():
                 locator_domain = "bishops.co"
 
                 driver.get(page_url)
+                time.sleep(10)
                 page_response = driver.page_source
                 if "WE HAVE MOVED TO" in page_response:
                     continue
