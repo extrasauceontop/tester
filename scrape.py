@@ -1,111 +1,115 @@
-from sgselenium import SgChrome
+from sgselenium import SgChromeWithoutSeleniumWire
+from sgscrape import simple_scraper_pipeline as sp
+import json
 from bs4 import BeautifulSoup as bs
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
-from sgscrape import simple_scraper_pipeline as sp
-from sgpostal.sgpostal import parse_address_intl
-import time
+from proxyfier import ProxyProviders
+
+
+def extract_json(html_string):
+    json_objects = []
+    count = 0
+
+    brace_count = 0
+    for element in html_string:
+
+        if element == "{":
+            brace_count = brace_count + 1
+            if brace_count == 1:
+                start = count
+
+        elif element == "}":
+            brace_count = brace_count - 1
+            if brace_count == 0:
+                end = count
+                try:
+                    json_objects.append(json.loads(html_string[start : end + 1]))
+                except Exception:
+                    pass
+        count = count + 1
+
+    return json_objects
 
 
 def get_data():
-    url = "https://bishops.co/search-results/2/?form=3"
-    with SgChrome() as driver:
-        x = 0
-        while True:
-            x = x + 1
-            if x == 20:
-                break
-            url = "https://bishops.co/search-results/" + str(x) + "/?form=3"
-            driver.get(url)
-            response = driver.page_source
-            if (
-                "THERE ARE NO LOCATIONS FOUND WITHIN 25 MILES OF YOUR SEARCH."
-                in driver.page_source
-            ):
-                break
-            soup = bs(response, "html.parser")
+    url = "https://www.bravissimo.com/us/shops/all/"
+    with SgChromeWithoutSeleniumWire(is_headless=False, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
+        driver.get(url)
+        response = driver.page_source
 
-            page_links = [
-                div.find("a")["href"]
-                for div in soup.find_all(
-                    "div", attrs={"class": "location-post-block-link"}
-                )
-            ]
+        for location in extract_json(response)[-1]["shops"]["all"]:
+            locator_domain = "www.bravissimo.com"
+            page_url = "https://www.bravissimo.com/us/shops/" + location["slug"]
+            location_name = location["name"]
+            latitude = location["location"]["lat"]
+            longitude = location["location"]["lon"]
+            city = location["address"]["town"]
+            store_number = location["b2id"]
 
-            for page_url in page_links:
-                locator_domain = "bishops.co"
-
-                driver.get(page_url)
-                time.sleep(10)
-                page_response = driver.page_source
-                if "WE HAVE MOVED TO" in page_response:
-                    continue
-                page_soup = bs(page_response, "html.parser")
-
-                location_name = page_soup.find("h1").text.strip()
-                data_section = page_soup.find_all(
-                    "div", attrs={"class": "section group wow fadeIn"}
-                )[1]
-
-                try:
-                    lat_lon_part = data_section.find(
-                        "div", attrs={"class": "col span_3_of_12"}
-                    ).find("a")["href"]
-                    latitude = lat_lon_part.split("/@")[1].split(",")[0]
-                    longitude = lat_lon_part.split("/@")[1].split(",")[1]
-                except Exception:
-                    latitude = SgRecord.MISSING
-                    longitude = SgRecord.MISSING
-
-                store_number = SgRecord.MISSING
-                phone_check = data_section.find_all("a")
-                for check in phone_check:
-                    if "tel:" in check["href"]:
-                        phone = check["href"].replace("tel:", "")
-                        break
-
-                location_type = "<MISSING>"
-                country_code = "US"
-
-                try:
-                    hours = data_section.find("p").text.strip()
-                except Exception:
-                    continue
-                hours = hours.replace("\n", ", ")
-
-                address_parts = data_section.find(
-                    "div", attrs={"class": "col span_3_of_12"}
-                ).text.strip()
-                addr = parse_address_intl(address_parts)
-
-                city = addr.city if addr.city is not None else SgRecord.MISSING
-                state = addr.state if addr.state is not None else SgRecord.MISSING
-                zipp = addr.postcode if addr.postcode is not None else SgRecord.MISSING
-
+            try:
                 address = (
-                    addr.street_address_1 + " " + addr.street_address_2
-                    if addr.street_address_2 is not None
-                    else addr.street_address_1
+                    (
+                        location["address"]["address2"]
+                        + " "
+                        + str(location["address"]["address3"])
+                    )
+                    .replace("None", "")
+                    .strip()
                 )
+            except Exception:
+                address = location["address"]["address2"]
 
-                yield {
-                    "locator_domain": locator_domain,
-                    "page_url": page_url,
-                    "location_name": location_name,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "city": city,
-                    "street_address": address,
-                    "state": state,
-                    "zip": zipp,
-                    "store_number": store_number,
-                    "phone": phone,
-                    "location_type": location_type,
-                    "hours": hours,
-                    "country_code": country_code,
-                }
+            zipp = location["address"]["postCode"]
+            location_type = "<MISSING>"
+            country_code = location["country"]
+            if country_code == "US":
+                state = zipp.split(" ")[0]
+                zipp = zipp.split(" ")[1]
+
+            else:
+                state = "<MISSING>"
+
+            driver.get(page_url)
+            page_response = driver.page_source
+            page_soup = bs(page_response, "html.parser")
+
+            phone = (
+                page_soup.find("span", attrs={"class": "c-shop__telephone"})
+                .find("a")["href"]
+                .replace("tel:", "")
+            )
+
+            hours = ""
+            hours_parts = page_soup.find(
+                "table", attrs={"class": "c-shop__opening-times"}
+            ).find_all("tr")
+            for part in hours_parts:
+                if "Times" in part.text.strip():
+                    continue
+                day = part.find_all("td")[0].text.strip()
+                time = part.find_all("td")[-1].text.strip()
+                hours = hours + day + " " + time + ", "
+            hours = hours[:-2].split(", Bank")[0]
+
+            yield {
+                "locator_domain": locator_domain,
+                "page_url": page_url,
+                "location_name": location_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "city": city,
+                "store_number": store_number,
+                "street_address": address,
+                "state": state,
+                "zip": zipp,
+                "phone": phone,
+                "location_type": location_type,
+                "hours": hours,
+                "country_code": country_code,
+            }
 
 
 def scrape():
