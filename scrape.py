@@ -39,7 +39,7 @@ def get_data():
     with SgChromeWithoutSeleniumWire(is_headless=False, proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
         driver.get(url)
         response = driver.page_source
-        print(extract_json(response)[-1])
+        print(extract_json(response))
         for location in extract_json(response)[-1]["shops"]["all"]:
             locator_domain = "www.bravissimo.com"
             page_url = "https://www.bravissimo.com/us/shops/" + location["slug"]
