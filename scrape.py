@@ -1,82 +1,109 @@
-from sgrequests import SgRequests
-from sgscrape import simple_scraper_pipeline as sp
+from sgselenium import SgChrome
 from bs4 import BeautifulSoup as bs
-from proxyfier import ProxyProviders
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
+from sgscrape import simple_scraper_pipeline as sp
+from sgpostal.sgpostal import parse_address_intl
+
 
 def get_data():
-    with SgRequests(
-        dont_retry_status_codes=[404], retries_with_fresh_proxy_ip=0, proxy_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER
-    ) as session:
-        url = "https://www.servicemasterclean.com/locations/?CallAjax=GetLocations"
-        params = {
-            "zipcode": "",
-            "distance": 5000,
-            "tab": "ZipSearch",
-            "templates": {
-                "Item": '&lt;li data-servicetype="[{ServiceTypeIDs}]" data-serviceid="[{ServiceIDs}]"&gt;\t&lt;h2&gt;{FranchiseLocationName}&lt;/h2&gt;\t&lt;div class="info flex"&gt;\t\t&lt;if field="GMBLink"&gt;\t\t\t&lt;span class="rating-{FN0:GMBReviewRatingScoreOutOfFive}"&gt;\t\t\t\t{FN1:GMBReviewRatingScoreOutOfFive}\t\t\t\t&lt;svg data-use="star.36" class="rate1"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate2"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate3"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate4"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate5"&gt;&lt;/svg&gt;\t\t\t&lt;/span&gt;\t\t\t&lt;a href="{http:GMBLink}" target="_blank"&gt;Visit Google My Business Page&lt;/a&gt;\t\t&lt;/if&gt;\t\t&lt;if field="YelpLink"&gt;\t\t\t&lt;span class="rating-{FN0:YelpReviewRatingScoreOutOfFive}"&gt;\t\t\t\t{FN1:YelpReviewRatingScoreOutOfFive}\t\t\t\t&lt;svg data-use="star.36" class="rate1"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate2"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate3"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate4"&gt;&lt;/svg&gt;\t\t\t\t&lt;svg data-use="star.36" class="rate5"&gt;&lt;/svg&gt;\t\t\t&lt;/span&gt;\t\t\t&lt;a href="{http:YelpLink}" target="_blank"&gt;Visit Yelp Page&lt;/a&gt;\t\t&lt;/if&gt;\t\t&lt;a class="flex" href="tel:{Phone}"&gt;\t\t\t&lt;svg data-use="phone.36"&gt;&lt;/svg&gt; {F:P:Phone}\t\t&lt;/a&gt;\t\t&lt;if field="Path"&gt;\t\t\t&lt;a href="{Path}" class="text-btn" rel="nofollow noopener"&gt;Website&lt;/a&gt;\t\t&lt;/if&gt;\t&lt;/div&gt;\t&lt;div class="type flex"&gt;\t\t&lt;strong&gt;Services:&lt;/strong&gt;\t\t&lt;ul&gt;\t\t\t&lt;if field="{ServiceIDs}" contains="2638"&gt;\t\t\t\t&lt;li&gt;Commercial&lt;/li&gt;\t\t\t&lt;/if&gt;\t\t\t&lt;if field="{ServiceIDs}" contains="2658"&gt;\t\t\t\t&lt;li&gt;Residential&lt;/li&gt;\t\t\t&lt;/if&gt;\t\t\t&lt;if field="{ServiceIDs}" contains="2634"&gt;\t\t\t\t&lt;li&gt;Janitorial&lt;/li&gt;\t\t\t&lt;/if&gt;\t\t&lt;/ul&gt;\t&lt;/div&gt;&lt;/li&gt;'
-            },
-        }
-
-        response = session.post(url, json=params).json()
+    url = "https://bishops.co/search-results/2/?form=3"
+    with SgChrome() as driver:
         x = 0
-        for location in response:
+        while True:
             x = x + 1
-            locator_domain = "www.servicemasterclean.com"
-            page_url = "https://www.servicemasterclean.com" + location["Path"]
-            latitude = location["Latitude"]
-            longitude = location["Longitude"]
-            location_name = location["BusinessName"]
-            city = location["City"]
-            state = location["State"]
-            store_number = location["FranchiseLocationID"]
-            address = location["Address1"]
-            zipp = location["ZipCode"]
-            phone = location["Phone"]
-            location_type = "<MISSING>"
-            country_code = location["Country"]
+            if x == 20:
+                break
+            url = "https://bishops.co/search-results/" + str(x) + "/?form=3"
+            driver.get(url)
+            response = driver.page_source
+            if (
+                "THERE ARE NO LOCATIONS FOUND WITHIN 25 MILES OF YOUR SEARCH."
+                in driver.page_source
+            ):
+                break
+            soup = bs(response, "html.parser")
 
-            hours_params = {
-                "_m_": "HoursPopup",
-                "HoursPopup$_edit_": store_number,
-                "HoursPopup$_command_": "",
-            }
-            hours_response = session.post(page_url, params=hours_params)
+            page_links = [
+                div.find("a")["href"]
+                for div in soup.find_all(
+                    "div", attrs={"class": "location-post-block-link"}
+                )
+            ]
 
-            if hours_response.status_code == 404:
-                hours = "Coming Soon"
+            for page_url in page_links:
+                locator_domain = "bishops.co"
 
-            else:
-                hours_soup = bs(hours_response.text, "html.parser")
-                hours_rows = hours_soup.find_all("table")[-1].find_all("tr")
-                hours = ""
-                for row in hours_rows:
-                    day = row.find("td").text.strip()
-                    times = row.find_all("td")[-1].text.strip()
+                driver.get(page_url)
+                page_response = driver.page_source
+                if "WE HAVE MOVED TO" in page_response:
+                    continue
+                page_soup = bs(page_response, "html.parser")
 
-                    hours = hours + day + " " + times + ", "
+                location_name = page_soup.find("h1").text.strip()
+                data_section = page_soup.find_all(
+                    "div", attrs={"class": "section group wow fadeIn"}
+                )[1]
 
-                hours = hours[:-2]
+                try:
+                    lat_lon_part = data_section.find(
+                        "div", attrs={"class": "col span_3_of_12"}
+                    ).find("a")["href"]
+                    latitude = lat_lon_part.split("/@")[1].split(",")[0]
+                    longitude = lat_lon_part.split("/@")[1].split(",")[1]
+                except Exception:
+                    latitude = SgRecord.MISSING
+                    longitude = SgRecord.MISSING
 
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": page_url,
-                "location_name": location_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": city,
-                "store_number": store_number,
-                "street_address": address,
-                "state": state,
-                "zip": zipp,
-                "phone": phone,
-                "location_type": location_type,
-                "hours": hours,
-                "country_code": country_code,
-            }
+                store_number = SgRecord.MISSING
+                phone_check = data_section.find_all("a")
+                for check in phone_check:
+                    if "tel:" in check["href"]:
+                        phone = check["href"].replace("tel:", "")
+                        break
+
+                location_type = "<MISSING>"
+                country_code = "US"
+
+                try:
+                    hours = data_section.find("p").text.strip()
+                except Exception:
+                    continue
+                hours = hours.replace("\n", ", ")
+
+                address_parts = data_section.find(
+                    "div", attrs={"class": "col span_3_of_12"}
+                ).text.strip()
+                addr = parse_address_intl(address_parts)
+
+                city = addr.city if addr.city is not None else SgRecord.MISSING
+                state = addr.state if addr.state is not None else SgRecord.MISSING
+                zipp = addr.postcode if addr.postcode is not None else SgRecord.MISSING
+
+                address = (
+                    addr.street_address_1 + " " + addr.street_address_2
+                    if addr.street_address_2 is not None
+                    else addr.street_address_1
+                )
+
+                yield {
+                    "locator_domain": locator_domain,
+                    "page_url": page_url,
+                    "location_name": location_name,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "city": city,
+                    "street_address": address,
+                    "state": state,
+                    "zip": zipp,
+                    "store_number": store_number,
+                    "phone": phone,
+                    "location_type": location_type,
+                    "hours": hours,
+                    "country_code": country_code,
+                }
 
 
 def scrape():
