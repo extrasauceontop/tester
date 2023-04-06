@@ -26,7 +26,8 @@ def extract_json(html_string):
             if brace_count == 0:
                 end = count
                 try:
-                    json_objects.append(json.loads(html_string[start : end + 1]))
+                    if "shops" in html_string[start : end + 1]:
+                        json_objects.append(json.loads(html_string[start : end + 1]))
                 except Exception:
                     pass
         count = count + 1
