@@ -1,160 +1,111 @@
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from sgselenium.sgselenium import SgChromeWithoutSeleniumWire
+from sgselenium import SgChrome
 from bs4 import BeautifulSoup as bs
-from sgscrape import simple_scraper_pipeline as sp
-import ssl
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
+from sgscrape import simple_scraper_pipeline as sp
+from sgpostal.sgpostal import parse_address_intl
 import time
-from selenium.webdriver.common.alert import Alert
-import unidecode
-import html
-
-ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def get_data():
-    def check_response(dresponse):
-        time.sleep(2)
-        alert = Alert(driver)
-        try:
-            alert.accept()
-        except Exception:
-            pass
-        if "Checking if the site connection is secure" in driver.page_source:
-            return False
-        return True
+    url = "https://bishops.co/search-results/2/?form=3"
+    with SgChrome() as driver:
+        x = 0
+        while True:
+            x = x + 1
+            if x == 20:
+                break
+            url = "https://bishops.co/search-results/" + str(x) + "/?form=3"
+            driver.get(url)
+            response = driver.page_source
+            if (
+                "THERE ARE NO LOCATIONS FOUND WITHIN 25 MILES OF YOUR SEARCH."
+                in driver.page_source
+            ):
+                break
+            soup = bs(response, "html.parser")
 
-    user_agent = (
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0"
-    )
-    url = "https://www.simons.ca/en/stores/our-stores--a13090"
-
-    with SgChromeWithoutSeleniumWire(
-        user_agent=user_agent,
-        is_headless=False,
-        block_third_parties=False,
-        page_meets_expectations=check_response,
-    ) as driver:
-        driver.get(url)
-        response = driver.page_source
-        soup = bs(response, "html.parser")
-
-        a_tags = soup.find_all(
-            "a",
-            attrs={
-                "class": "simonsLandingStoreCardLink",
-            },
-        )
-        class_name = "stores-title"
-        for a_tag in a_tags:
-            locator_domain = "simons.ca"
-            page_url = a_tag["href"]
-            driver.get(page_url)
-
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CLASS_NAME, class_name))
-            )
-            location_response = driver.page_source
-            location_soup = bs(location_response.replace("<br>", "\n"), "html.parser")
-
-            location_name = location_soup.find(
-                "h1",
-                attrs={
-                    "class": "stores-title",
-                },
-            ).text.strip()
-
-            lat_lon_parts = location_soup.find(
-                "a",
-                attrs={
-                    "class": "stores-mapLink",
-                },
-            )["href"]
-            try:
-                latitude = lat_lon_parts.split("@")[1].split(",")[0]
-                longitude = lat_lon_parts.split("@")[1].split(",")[1]
-            except Exception:
-                latitude = "<MISSING>"
-                longitude = "<MISSING>"
-            address_parts = (
-                unidecode.unidecode(
-                    html.unescape(
-                        (
-                            location_soup.find(
-                                "p",
-                                attrs={
-                                    "class": "stores-address",
-                                },
-                            )
-                            .text.strip()
-                            .replace(" (Québec)", ", QC")
-                            .replace(" (Quebec)", ", QC")
-                        )
-                    )
+            page_links = [
+                div.find("a")["href"]
+                for div in soup.find_all(
+                    "div", attrs={"class": "location-post-block-link"}
                 )
-                .replace("MontrA(c)al (QuA(c)bec)", "Montreal, (Quebec)")
-                .split("\n")
-            )
-            city = address_parts[-1].split(", ")[0]
-            store_number = "<MISSING>"
-            address = address_parts[0]
-            state = address_parts[-1].split(", ")[1].split(" ")[0]
-            zipp = "".join(
-                part + " " for part in address_parts[-1].split(", ")[1].split(" ")[1:]
-            )
+            ]
 
-            phone = location_soup.find("a", attrs={"class": "stores-tel"})[
-                "href"
-            ].replace("tel:", "")
-            location_type = "<MISSING>"
-            country_code = "CA"
+            for page_url in page_links:
+                locator_domain = "bishops.co"
+                print(page_url)
+                driver.get(page_url)
+                time.sleep(10)
+                page_response = driver.page_source
+                if "WE HAVE MOVED TO" in page_response:
+                    continue
+                page_soup = bs(page_response, "html.parser")
 
-            days = (
-                location_soup.find("div", attrs={"class": "stores-hour"})
-                .find(
-                    "div",
-                    attrs={
-                        "class": "stores-hoursLeft",
-                    },
+                location_name = page_soup.find("h1").text.strip()
+                data_section = page_soup.find_all(
+                    "div", attrs={"class": "section group wow fadeIn"}
+                )[1]
+
+                try:
+                    lat_lon_part = data_section.find(
+                        "div", attrs={"class": "col span_3_of_12"}
+                    ).find("a")["href"]
+                    latitude = lat_lon_part.split("/@")[1].split(",")[0]
+                    longitude = lat_lon_part.split("/@")[1].split(",")[1]
+                except Exception:
+                    latitude = SgRecord.MISSING
+                    longitude = SgRecord.MISSING
+
+                store_number = SgRecord.MISSING
+                phone_check = data_section.find_all("a")
+                for check in phone_check:
+                    if "tel:" in check["href"]:
+                        phone = check["href"].replace("tel:", "")
+                        break
+
+                location_type = "<MISSING>"
+                country_code = "US"
+
+                try:
+                    hours = data_section.find("p").text.strip()
+                except Exception:
+                    continue
+                hours = hours.replace("\n", ", ")
+
+                address_parts = data_section.find(
+                    "div", attrs={"class": "col span_3_of_12"}
+                ).text.strip()
+                addr = parse_address_intl(address_parts)
+
+                city = addr.city if addr.city is not None else SgRecord.MISSING
+                state = addr.state if addr.state is not None else SgRecord.MISSING
+                zipp = addr.postcode if addr.postcode is not None else SgRecord.MISSING
+
+                address = (
+                    addr.street_address_1 + " " + addr.street_address_2
+                    if addr.street_address_2 is not None
+                    else addr.street_address_1
                 )
-                .find_all("p")
-            )
-            hours_parts = (
-                location_soup.find("div", attrs={"class": "stores-hour"})
-                .find("div", attrs={"class": "stores-hoursRight"})
-                .find_all("p")
-            )
 
-            hours = ""
-            for x in range(len(days)):
-                day = days[x].text.strip()
-                part = hours_parts[x].text.strip()
-
-                hours = hours + day + " " + part + ", "
-
-            hours = hours[:-2]
-
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": page_url,
-                "location_name": location_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": city,
-                "store_number": store_number,
-                "street_address": address,
-                "state": state,
-                "zip": zipp,
-                "phone": phone,
-                "location_type": location_type,
-                "hours": hours,
-                "country_code": country_code,
-            }
+                yield {
+                    "locator_domain": locator_domain,
+                    "page_url": page_url,
+                    "location_name": location_name,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "city": city,
+                    "street_address": address,
+                    "state": state,
+                    "zip": zipp,
+                    "store_number": store_number,
+                    "phone": phone,
+                    "location_type": location_type,
+                    "hours": hours,
+                    "country_code": country_code,
+                }
 
 
 def scrape():
@@ -201,4 +152,5 @@ def scrape():
         pipeline.run()
 
 
-scrape()
+if __name__ == "__main__":
+    scrape()
