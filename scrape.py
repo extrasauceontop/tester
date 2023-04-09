@@ -11,7 +11,7 @@ import time
 
 def get_data():
     url = "https://bishops.co/search-results/2/?form=3"
-    with SgChrome() as driver:
+    with SgChrome(is_headless=False) as driver:
         x = 0
         while True:
             x = x + 1
@@ -89,6 +89,8 @@ def get_data():
                     if addr.street_address_2 is not None
                     else addr.street_address_1
                 )
+
+                city = state = zipp = address = "<LATER>"
 
                 yield {
                     "locator_domain": locator_domain,
