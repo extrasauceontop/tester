@@ -1,158 +1,117 @@
-from sgselenium import SgChrome
-from bs4 import BeautifulSoup as bs
-from sgscrape.sgrecord_deduper import SgRecordDeduper
-from sgscrape.sgrecord import SgRecord
-from sgscrape.sgwriter import SgWriter
-from sgscrape.sgrecord_id import SgRecordID
-from sgscrape import simple_scraper_pipeline as sp
-from sgpostal.sgpostal import parse_address_intl
-import time
+from sgrequests import SgRequests  # noqa
+from sgzip.dynamic import SearchableCountries  # noqa
+from sgzip.parallel import (  # noqa
+    DynamicSearchMaker,  # noqa
+    ParallelDynamicSearch,  # noqa
+    SearchIteration,  # noqa
+)  # noqa
+from sgscrape.sgwriter import SgWriter  # noqa
+from sgscrape.sgrecord import SgRecord  # noqa
+from sgscrape.sgrecord_id import SgRecordID  # noqa
+from sgscrape.sgrecord_deduper import SgRecordDeduper  # noqa
+from typing import Iterable, Tuple, Callable  # noqa
+from sgscrape.pause_resume import CrawlStateSingleton  # noqa
+import sgcrawl
+
+class ExampleSearchIteration(SearchIteration):
+    def __init__(self, http: SgRequests):
+        self.__http = http  # noqa
+        self.__state = CrawlStateSingleton.get_instance()  # noqa
+
+    def do(
+        self,
+        coord: Tuple[float, float],
+        zipcode: str,  # noqa
+        current_country: str,  # noqa
+        items_remaining: int,  # noqa
+        found_location_at: Callable[[float, float], None],  # noqa
+        found_nothing: Callable[[], None],
+    ) -> Iterable[SgRecord]:  # noqa
+        search_lat, search_lon = coord
+        found_nothing()
+        url = "https://www.avis.com/webapi/station/proximitySearch"
+        data = {
+            "type": "proximity",
+            "countryName": "",
+            "geoCoordinate": {"longitude": search_lon, "latitude": search_lat},
+            "rqHeader": {"locale": "en_US", "domain": "us"},
+        }
+
+        response = self.__http.post(url, json=data)
+        js = response.json().get("stationInfoList") or []
+        for j in js:
+            locator_domain = "avis.com"
+            location_name = j.get("description")
+
+            adr1 = j.get("address1") or ""
+            adr2 = j.get("address2") or ""
+            street_address = f"{adr1} {adr2}".strip()
+            city = j.get("city")
+            state = j.get("stateCode") or ""
+            if state.lower().strip() == "xx":
+                state = SgRecord.MISSING
+            postal = j.get("zipCode")
+            cc = j.get("countyCode")
+            phone = j.get("phoneNumber")
+            store_number = j.get("locationCode")
+            latitude = j.get("latitude")
+            longitude = j.get("longitude")
+
+            if str(latitude) == "null":
+                latitude, longitude = SgRecord.MISSING, SgRecord.MISSING
+
+            try:
+                slug = j["augmentDataMap"]["REL_PATH"]
+            except:
+                slug = ""
+            page_url = f"https://www.avis.com/en/locations/{slug}"
+            hours_of_operation = j.get("hoursOfOperation")
+            location_type = j.get("licInd")
+
+            item = SgRecord(
+                locator_domain=locator_domain,
+                page_url=page_url,
+                location_name=location_name,
+                street_address=street_address,
+                city=city,
+                state=state,
+                zip_postal=postal,
+                country_code=cc,
+                store_number=store_number,
+                phone=phone,
+                location_type=location_type,
+                latitude=latitude,
+                longitude=longitude,
+                hours_of_operation=hours_of_operation,
+            )
+            yield item
 
 
-def get_data():
-    url = "https://bishops.co/search-results/2/?form=3"
-    with SgChrome(is_headless=False) as driver:
-        x = 0
-        while True:
-            x = x + 1
-            if x == 20:
-                break
-            url = "https://bishops.co/search-results/" + str(x) + "/?form=3"
-            driver.get(url)
-            response = driver.page_source
-            if (
-                "THERE ARE NO LOCATIONS FOUND WITHIN 25 MILES OF YOUR SEARCH."
-                in driver.page_source
-            ):
-                break
-            soup = bs(response, "html.parser")
-
-            page_links = [
-                div.find("a")["href"]
-                for div in soup.find_all(
-                    "div", attrs={"class": "location-post-block-link"}
-                )
-            ]
-
-            for page_url in page_links:
-                locator_domain = "bishops.co"
-                print(page_url)
-                driver.get(page_url)
-                time.sleep(10)
-                page_response = driver.page_source
-                if "WE HAVE MOVED TO" in page_response:
-                    continue
-                page_soup = bs(page_response, "html.parser")
-
-                location_name = page_soup.find("h1").text.strip()
-                data_section = page_soup.find_all(
-                    "div", attrs={"class": "section group wow fadeIn"}
-                )[1]
-
-                try:
-                    lat_lon_part = data_section.find(
-                        "div", attrs={"class": "col span_3_of_12"}
-                    ).find("a")["href"]
-                    latitude = lat_lon_part.split("/@")[1].split(",")[0]
-                    longitude = lat_lon_part.split("/@")[1].split(",")[1]
-                except Exception:
-                    latitude = SgRecord.MISSING
-                    longitude = SgRecord.MISSING
-
-                store_number = SgRecord.MISSING
-                phone_check = data_section.find_all("a")
-                for check in phone_check:
-                    if "tel:" in check["href"]:
-                        phone = check["href"].replace("tel:", "")
-                        break
-
-                location_type = "<MISSING>"
-                country_code = "US"
-
-                try:
-                    hours = data_section.find("p").text.strip()
-                except Exception:
-                    continue
-                hours = hours.replace("\n", ", ")
-
-                address_parts = data_section.find(
-                    "div", attrs={"class": "col span_3_of_12"}
-                ).text.strip()
-                addr = parse_address_intl(address_parts)
-
-                city = addr.city if addr.city is not None else SgRecord.MISSING
-                state = addr.state if addr.state is not None else SgRecord.MISSING
-                zipp = addr.postcode if addr.postcode is not None else SgRecord.MISSING
-
-                address = (
-                    addr.street_address_1 + " " + addr.street_address_2
-                    if addr.street_address_2 is not None
-                    else addr.street_address_1
-                )
-
-                city = state = zipp = address = "<LATER>"
-
-                yield {
-                    "locator_domain": locator_domain,
-                    "page_url": page_url,
-                    "location_name": location_name,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "city": city,
-                    "street_address": address,
-                    "state": state,
-                    "zip": zipp,
-                    "store_number": store_number,
-                    "phone": phone,
-                    "location_type": location_type,
-                    "hours": hours,
-                    "country_code": country_code,
-                }
-
-
-def scrape():
-    field_defs = sp.SimpleScraperPipeline.field_definitions(
-        locator_domain=sp.MappingField(mapping=["locator_domain"]),
-        page_url=sp.MappingField(mapping=["page_url"]),
-        location_name=sp.MappingField(mapping=["location_name"]),
-        latitude=sp.MappingField(mapping=["latitude"]),
-        longitude=sp.MappingField(mapping=["longitude"]),
-        street_address=sp.MultiMappingField(
-            mapping=["street_address"], is_required=False
-        ),
-        city=sp.MappingField(
-            mapping=["city"],
-        ),
-        state=sp.MappingField(mapping=["state"], is_required=False),
-        zipcode=sp.MultiMappingField(mapping=["zip"], is_required=False),
-        country_code=sp.MappingField(mapping=["country_code"]),
-        phone=sp.MappingField(mapping=["phone"], is_required=False),
-        store_number=sp.MappingField(mapping=["store_number"]),
-        hours_of_operation=sp.MappingField(mapping=["hours"], is_required=False),
-        location_type=sp.MappingField(mapping=["location_type"], is_required=False),
-    )
-
+if __name__ == "__main__":
     with SgWriter(
         deduper=SgRecordDeduper(
             SgRecordID(
                 {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
-                    SgRecord.Headers.PAGE_URL,
+                    SgRecord.Headers.STORE_NUMBER,
                     SgRecord.Headers.LOCATION_NAME,
+                    SgRecord.Headers.LOCATION_TYPE,
                 }
             ),
-            duplicate_streak_failure_factor=100,
+            duplicate_streak_failure_factor=-1,
         )
     ) as writer:
-        pipeline = sp.SimpleScraperPipeline(
-            scraper_name="Crawler",
-            data_fetcher=get_data,
-            field_definitions=field_defs,
-            record_writer=writer,
+        search_maker = DynamicSearchMaker(
+            search_type="DynamicGeoSearch",
+            expected_search_radius_miles=15,
         )
-        pipeline.run()
 
+        par_search = ParallelDynamicSearch(
+            search_maker=search_maker,
+            search_iteration=lambda: ExampleSearchIteration(
+                http=SgRequests.mk_self_destructing_instance()
+            ),
+            country_codes=SearchableCountries.ALL,
+        )
 
-if __name__ == "__main__":
-    scrape()
+        for rec in par_search.run():
+            writer.write_row(rec)
