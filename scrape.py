@@ -1,117 +1,99 @@
-from sgrequests import SgRequests  # noqa
-from sgzip.dynamic import SearchableCountries  # noqa
-from sgzip.parallel import (  # noqa
-    DynamicSearchMaker,  # noqa
-    ParallelDynamicSearch,  # noqa
-    SearchIteration,  # noqa
-)  # noqa
-from sgscrape.sgwriter import SgWriter  # noqa
-from sgscrape.sgrecord import SgRecord  # noqa
-from sgscrape.sgrecord_id import SgRecordID  # noqa
-from sgscrape.sgrecord_deduper import SgRecordDeduper  # noqa
-from typing import Iterable, Tuple, Callable  # noqa
-from sgscrape.pause_resume import CrawlStateSingleton  # noqa
-import sgcrawl
+# -*- coding: utf-8 -*-
+from lxml import etree
+from time import sleep
 
-class ExampleSearchIteration(SearchIteration):
-    def __init__(self, http: SgRequests):
-        self.__http = http  # noqa
-        self.__state = CrawlStateSingleton.get_instance()  # noqa
+from sgscrape.sgrecord import SgRecord
+from sgscrape.sgrecord_deduper import SgRecordDeduper
+from sgscrape.sgrecord_id import SgRecordID
+from sgscrape.sgwriter import SgWriter
+from sgselenium.sgselenium import SgFirefox
+from sgzip.dynamic import DynamicZipSearch, SearchableCountries
+from sgpostal.sgpostal import parse_address_intl
 
-    def do(
-        self,
-        coord: Tuple[float, float],
-        zipcode: str,  # noqa
-        current_country: str,  # noqa
-        items_remaining: int,  # noqa
-        found_location_at: Callable[[float, float], None],  # noqa
-        found_nothing: Callable[[], None],
-    ) -> Iterable[SgRecord]:  # noqa
-        search_lat, search_lon = coord
-        found_nothing()
-        url = "https://www.avis.com/webapi/station/proximitySearch"
-        data = {
-            "type": "proximity",
-            "countryName": "",
-            "geoCoordinate": {"longitude": search_lon, "latitude": search_lat},
-            "rqHeader": {"locale": "en_US", "domain": "us"},
-        }
 
-        response = self.__http.post(url, json=data)
-        js = response.json().get("stationInfoList") or []
-        for j in js:
-            locator_domain = "avis.com"
-            location_name = j.get("description")
+def fetch_data():
+    start_url = "https://www.panago.com/locations"
+    domain = "panago.com"
 
-            adr1 = j.get("address1") or ""
-            adr2 = j.get("address2") or ""
-            street_address = f"{adr1} {adr2}".strip()
-            city = j.get("city")
-            state = j.get("stateCode") or ""
-            if state.lower().strip() == "xx":
-                state = SgRecord.MISSING
-            postal = j.get("zipCode")
-            cc = j.get("countyCode")
-            phone = j.get("phoneNumber")
-            store_number = j.get("locationCode")
-            latitude = j.get("latitude")
-            longitude = j.get("longitude")
-
-            if str(latitude) == "null":
-                latitude, longitude = SgRecord.MISSING, SgRecord.MISSING
-
+    with SgFirefox(proxy_country="ca") as driver:
+        all_codes = DynamicZipSearch(
+            country_codes=[SearchableCountries.CANADA], expected_search_radius_miles=50
+        )
+        for code in all_codes:
+            test_code = "M2K 1W9"
+            driver.get(start_url)
             try:
-                slug = j["augmentDataMap"]["REL_PATH"]
-            except:
-                slug = ""
-            page_url = f"https://www.avis.com/en/locations/{slug}"
-            hours_of_operation = j.get("hoursOfOperation")
-            location_type = j.get("licInd")
-
-            item = SgRecord(
-                locator_domain=locator_domain,
-                page_url=page_url,
-                location_name=location_name,
-                street_address=street_address,
-                city=city,
-                state=state,
-                zip_postal=postal,
-                country_code=cc,
-                store_number=store_number,
-                phone=phone,
-                location_type=location_type,
-                latitude=latitude,
-                longitude=longitude,
-                hours_of_operation=hours_of_operation,
+                driver.find_element(
+                    "xpath", '//div[contains(@class, "location-choice-panel")]/a'
+                ).click()
+                sleep(2)
+            except Exception:
+                pass
+            code_input = driver.find_element(
+                "xpath", '//input[@placeholder="Type a postal code or a city"]'
             )
-            yield item
+            code_input.clear()
+            sleep(1)
+            code_input.send_keys(test_code)
+            search_button = driver.find_element(
+                "xpath", '//button[contains(text(), "Search")]'
+            )
+            search_button.click()
+            sleep(15)
+            dom = etree.HTML(driver.page_source)
+            all_locations = dom.xpath('//li[@class="store-search-result"]')
+            if len(all_locations) == 0:
+                all_codes.found_nothing()
+                continue
+            for poi_html in all_locations:
+                location_name = raw_address = poi_html.xpath(
+                    './/p[@class="store-name"]/text()'
+                )[0]
+                zip_code = poi_html.xpath("./p[2]/text()")[0]
+                hoo = poi_html.xpath(".//div/text()")[0].split("Panago")[0]
+                addr = parse_address_intl(raw_address)
+                street_address = (
+                    f"{addr.street_address_1} {addr.street_address_2}".replace(
+                        "None", ""
+                    )
+                )
+                city = addr.city
+                state = addr.state
+                all_codes.found_location_at("", "")
+
+                item = SgRecord(
+                    locator_domain=domain,
+                    page_url=start_url,
+                    location_name=location_name,
+                    street_address=street_address,
+                    city=city,
+                    state=state,
+                    zip_postal=zip_code,
+                    country_code="ca",
+                    store_number="",
+                    phone="",
+                    location_type="",
+                    latitude="",
+                    longitude="",
+                    hours_of_operation=hoo,
+                    raw_address=raw_address,
+                )
+
+                yield item
+            break
+
+
+def scrape():
+    with SgWriter(
+        SgRecordDeduper(
+            SgRecordID(
+                {SgRecord.Headers.LOCATION_NAME, SgRecord.Headers.STREET_ADDRESS}
+            )
+        )
+    ) as writer:
+        for item in fetch_data():
+            writer.write_row(item)
 
 
 if __name__ == "__main__":
-    with SgWriter(
-        deduper=SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.STORE_NUMBER,
-                    SgRecord.Headers.LOCATION_NAME,
-                    SgRecord.Headers.LOCATION_TYPE,
-                }
-            ),
-            duplicate_streak_failure_factor=-1,
-        )
-    ) as writer:
-        search_maker = DynamicSearchMaker(
-            search_type="DynamicGeoSearch",
-            expected_search_radius_miles=15,
-        )
-
-        par_search = ParallelDynamicSearch(
-            search_maker=search_maker,
-            search_iteration=lambda: ExampleSearchIteration(
-                http=SgRequests.mk_self_destructing_instance()
-            ),
-            country_codes=SearchableCountries.ALL,
-        )
-
-        for rec in par_search.run():
-            writer.write_row(rec)
+    scrape()
