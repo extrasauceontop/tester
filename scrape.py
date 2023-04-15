@@ -19,6 +19,7 @@ def fetch_data():
             country_codes=[SearchableCountries.CANADA], expected_search_radius_miles=50
         )
         for code in all_codes:
+            print("here")
             test_code = "M2K 1W9"
             driver.get(start_url)
             try:
@@ -28,6 +29,7 @@ def fetch_data():
                 sleep(2)
             except Exception:
                 pass
+            print("there")
             code_input = driver.find_element(
                 "xpath", '//input[@placeholder="Type a postal code or a city"]'
             )
@@ -38,12 +40,15 @@ def fetch_data():
                 "xpath", '//button[contains(text(), "Search")]'
             )
             search_button.click()
+            print("maybe")
             sleep(15)
+            print("?")
             dom = etree.HTML(driver.page_source)
             all_locations = dom.xpath('//li[@class="store-search-result"]')
+            print(dom)
             if len(all_locations) == 0:
                 all_codes.found_nothing()
-                continue
+                break
             for poi_html in all_locations:
                 location_name = raw_address = poi_html.xpath(
                     './/p[@class="store-name"]/text()'
