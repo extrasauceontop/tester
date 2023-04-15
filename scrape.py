@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from lxml import etree
 from time import sleep
-
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import SgRecordID
@@ -9,13 +8,13 @@ from sgscrape.sgwriter import SgWriter
 from sgselenium.sgselenium import SgFirefox
 from sgzip.dynamic import DynamicZipSearch, SearchableCountries
 from sgpostal.sgpostal import parse_address_intl
-
+from proxyfier import ProxyProviders
 
 def fetch_data():
     start_url = "https://www.panago.com/locations"
     domain = "panago.com"
 
-    with SgFirefox(proxy_country="ca") as driver:
+    with SgFirefox(proxy_country="ca", proxy_provider_escalation_order=ProxyProviders.TEST_PROXY_ESCALATION_ORDER) as driver:
         all_codes = DynamicZipSearch(
             country_codes=[SearchableCountries.CANADA], expected_search_radius_miles=50
         )
