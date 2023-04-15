@@ -45,7 +45,7 @@ def fetch_data():
             print("?")
             dom = etree.HTML(driver.page_source)
             all_locations = dom.xpath('//li[@class="store-search-result"]')
-            print(dom)
+            print(driver.page_source)
             if len(all_locations) == 0:
                 all_codes.found_nothing()
                 break
