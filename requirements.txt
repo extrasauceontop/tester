@@ -1,2 +1,6 @@
 --index-url https://dl.cloudsmith.io/KVaWma76J5VNwrOm/crawl/crawl/python/simple/
-sgcrawl==1.23.0
+sgselenium==0.11.0
+beautifulsoup4==4.9.3
+sgscrape==0.7.4
+selenium==4.7.2
+sglogging==0.0.4
