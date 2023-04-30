@@ -8,7 +8,7 @@ from sgscrape.sgrecord import SgRecord
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgwriter import SgWriter
-from sgselenium.sgselenium import SgChromeWithoutSeleniumWire
+from sgselenium.sgselenium import SgChromeForCloudFlare
 from sglogging import SgLogSetup
 
 
@@ -145,7 +145,7 @@ def scrape():
 
 
 if __name__ == "__main__":
-    with SgChromeWithoutSeleniumWire(
+    with SgChromeForCloudFlare(
         proxy_country="us",
         is_headless=False,
         proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-us:{}@proxy.apify.com:8000/"]
