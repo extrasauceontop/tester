@@ -148,6 +148,7 @@ if __name__ == "__main__":
     with SgChromeForCloudFlare(
         proxy_country="us",
         is_headless=False,
+        proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-us:{}@proxy.apify.com:8000/"]
     ) as driver:
         domain = "caseys.com"
         logger = SgLogSetup().get_logger(domain)
