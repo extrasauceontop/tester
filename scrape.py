@@ -57,7 +57,7 @@ def fetch_data():
         tree = html.fromstring(source)
     print(source)
     divs = tree.xpath(
-        "//div[contains(@class, '-region col-sm-6') and .//*[text()='BOOK US']]"
+        "//div[contains(@class, 'ModularColumnStyled__ModularContentContainer-sc-14jgp1c-2') and .//*[text()='BOOK US']]"
     )
     print(len(divs))
     for d in divs:
