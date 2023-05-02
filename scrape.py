@@ -55,11 +55,11 @@ def fetch_data():
         fox.goto(api)
         source = fox.content()
         tree = html.fromstring(source)
-    print(source)
     divs = tree.xpath(
         "//div[contains(@class, '-region col-sm-6') and .//*[text()='BOOK US']]"
     )
     for d in divs:
+        print("here")
         slug = "".join(d.xpath(".//a[contains(@href, '/stores')]/@href"))
         if slug:
             page_url = f"https://www.serenaandlily.com{slug}"
