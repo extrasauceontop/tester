@@ -58,6 +58,7 @@ def fetch_data():
     divs = tree.xpath(
         "//div[contains(@class, '-region col-sm-6') and .//*[text()='BOOK US']]"
     )
+    print(len(divs))
     for d in divs:
         print("here")
         slug = "".join(d.xpath(".//a[contains(@href, '/stores')]/@href"))
