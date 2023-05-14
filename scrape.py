@@ -139,6 +139,7 @@ if __name__ == "__main__":
         is_headless=False,
         proxy_country="gb",
         page_meets_expectations=check_response,
+        proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-us:{}@proxy.apify.com:8000/"]
     ) as driver:
         locator_domain = "https://www.boylesports.com/"
         log = sglog.SgLogSetup().get_logger(logger_name="boylesports.com")
