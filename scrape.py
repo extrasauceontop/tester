@@ -40,6 +40,7 @@ def get_international(line):
 def get_params():
     driver.get("https://www.boylesports.com/ShopLocator")
     r = driver.page_source
+    print(r)
     tree = html.fromstring(r)
     source = "".join(tree.xpath("//div[@id='div-shop-locations']/text()")).strip()
     log.info(len(eval(source)))
@@ -124,41 +125,41 @@ if __name__ == "__main__":
         crawl_state.set_misc_value("set_count", True)
 
     count = crawl_state.get_misc_value("count")
-    while count < 3:
-        count = count + 1
-        crawl_state.set_misc_value("count", count)
-        x = 0
-        while True:
-            x = x + 1
-            if x == 10:
-                raise Exception
+    # while count < 3:
+            # count = count + 1
+            # crawl_state.set_misc_value("count", count)
+        # x = 0
+        # while True:
+        #     x = x + 1
+        #     if x == 10:
+        #         raise Exception
 
-            try:
-                with SgChromeWithoutSeleniumWire(
-                    is_headless=False,
-                    proxy_country="gb",
-                    page_meets_expectations=check_response,
-                ) as driver:
-                    locator_domain = "https://www.boylesports.com/"
-                    log = sglog.SgLogSetup().get_logger(logger_name="boylesports.com")
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:103.0) Gecko/20100101 Firefox/103.0",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                        "Connection": "keep-alive",
-                        "Upgrade-Insecure-Requests": "1",
-                        "Sec-Fetch-Dest": "document",
-                        "Sec-Fetch-Mode": "navigate",
-                        "Sec-Fetch-Site": "cross-site",
-                    }
-                    with SgWriter(
-                        SgRecordDeduper(RecommendedRecordIds.PageUrlId)
-                    ) as sgw:
-                        fetch_data()
+            # try:
+    with SgChromeWithoutSeleniumWire(
+        is_headless=False,
+        proxy_country="gb",
+        page_meets_expectations=check_response,
+    ) as driver:
+        locator_domain = "https://www.boylesports.com/"
+        log = sglog.SgLogSetup().get_logger(logger_name="boylesports.com")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:103.0) Gecko/20100101 Firefox/103.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "cross-site",
+        }
+        with SgWriter(
+            SgRecordDeduper(RecommendedRecordIds.PageUrlId)
+        ) as sgw:
+            fetch_data()
 
-                break
+    # break
 
-            except Exception as e:
-                log.info(e)
-                continue
+    #         except Exception as e:
+    #             log.info(e)
+    #             continue
 
-        crawl_state.set_misc_value("got_urls", False)
+    #     crawl_state.set_misc_value("got_urls", False)
