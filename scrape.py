@@ -518,6 +518,8 @@ def scrape_uae(session, headers):
                     "raw_address": raw_address,
                 }
             )
+    
+    return locs
 
 
 def scrape_newzealand(session, headers):
