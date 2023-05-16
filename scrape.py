@@ -459,7 +459,7 @@ def scrape_uae(session, headers):
         response = driver.page_source
         soup = bs(response, "html.parser")
         grids = soup.find_all("li", attrs={"class": "location-item"})
-
+        print(len(grids))
         for grid in grids:
             locator_domain = "https://uae.texaschicken.com/"
             page_url = "https://uae.texaschicken.com/Locations"
@@ -1056,71 +1056,71 @@ def get_data():
         #     for loc in locs:
         #         yield loc
 
-        if country == "Singapore":
-            locs = scrape_singapore(session, headers)
+        # if country == "Singapore":
+        #     locs = scrape_singapore(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Bahrain":
-            locs = scrape_bahrain(session, headers)
+        # elif country == "Bahrain":
+        #     locs = scrape_bahrain(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Jordan":
-            locs = scrape_jordan(session, headers)
+        # elif country == "Jordan":
+        #     locs = scrape_jordan(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Pakistan":
-            locs = scrape_pakistan(session, headers)
+        # elif country == "Pakistan":
+        #     locs = scrape_pakistan(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Riyadh & Eastern KSA":
-            continue
+        # elif country == "Riyadh & Eastern KSA":
+        #     continue
 
-        elif country == "United Arab Emirates":
+        if country == "United Arab Emirates":
             locs = scrape_uae(session, headers)
 
             for loc in locs:
                 yield loc
 
-        elif country == "New Zealand":
-            locs = scrape_newzealand(session, headers)
+        # elif country == "New Zealand":
+        #     locs = scrape_newzealand(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Oman":
-            locs = scrape_oman(session, headers)
+        # elif country == "Oman":
+        #     locs = scrape_oman(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Western KSA":
-            locs = scrape_ksa(session, headers)
+        # elif country == "Western KSA":
+        #     locs = scrape_ksa(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Iraq":
-            locs = scrape_iraq(session, headers)
+        # elif country == "Iraq":
+        #     locs = scrape_iraq(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        elif country == "Qatar":
-            locs = scrape_qatar(session, headers)
+        # elif country == "Qatar":
+        #     locs = scrape_qatar(session, headers)
 
-            for loc in locs:
-                yield loc
+        #     for loc in locs:
+        #         yield loc
 
-        else:
-            print(country)
+        # else:
+        #     print(country)
 
 
 def fix_location_name(loc):
