@@ -451,200 +451,56 @@ def scrape_pakistan(session, headers):
     return locs
 
 
-def scrape_riyadh(session, headers):
-    response = session.get("https://riyadh.texaschicken.com/en/Locations").text
-    lines = response.split("\n")
-
-    locs = []
-    for line in lines:
-
-        if "markers.push" in line:
-            line = (
-                line.replace("markers.push([", "")
-                .replace("]);", "")
-                .strip()
-                .replace("\t", "")
-                .replace("\r", "")
-                .replace("'", "")
-                .split(",")
-            )
-
-            locator_domain = "riyadh.pakistan.texaschicken.com/"
-            page_url = "https://riyadh.texaschicken.com/en/Locations"
-            location_name = line[0]
-            latitude = line[2]
-            longitude = line[1]
-            store_number = line[-1].strip()
-
-            params = {
-                "ID": int(store_number),
-                "Text": "",
-                "isDelivery": "",
-                "isWifi": "",
-                "isDrive": "",
-                "isKidsArea": "",
-                "isHandicap": "",
-                "isHours": "",
-                "_isMall": "",
-                "_isBreakfast": "",
-                "_isfacility": "",
-                "_isfacility2": "",
-                "_isfacility3": "",
-                "lang": "en",
-            }
-
-            location_response = session.post(
-                "https://riyadh.texaschicken.com/Locations/AjaxSearch",
-                headers=headers,
-                json=params,
-            ).text
-            location_soup = bs(location_response, "html.parser")
-
-            phone_check = location_soup.find_all("p", attrs={"class": "font-15"})[-1]
-            if "phone" in phone_check.text.strip().lower():
-                phone = phone_check.text.strip().lower().replace("phone:", "").strip()
-
-            else:
-                phone = "<MISSING>"
-
-            address_parts = (
-                location_soup.find("div", attrs={"class": "col-md-12"})
-                .find_all("p")[-1]
-                .text.strip()
-                .replace('"', "")
-            )
-            raw_address = address_parts
-
-            address = address_parts.split(", Riyadh")[0]
-
-            city = "<MISSING>"
-            state = "<MISSING>"
-            zipp = "<MISSING>"
-            country_code = "Riyadh"
-            location_type = "<MISSING>"
-            hours = (
-                location_soup.find("p", attrs={"class": "font-15"})
-                .text.strip()
-                .replace("Opening ", "")
-                .replace("\r", " ")
-                .replace("\n", " ")
-                .replace("\t", " ")
-                .replace("                          ", " ")
-            )
-
-            locs.append(
-                {
-                    "locator_domain": locator_domain,
-                    "page_url": page_url,
-                    "location_name": location_name,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "city": city,
-                    "store_number": store_number,
-                    "street_address": address,
-                    "state": state,
-                    "zip": zipp,
-                    "phone": phone,
-                    "location_type": location_type,
-                    "hours": hours,
-                    "country_code": country_code,
-                    "raw_address": raw_address,
-                }
-            )
-
-    return locs
-
-
 def scrape_uae(session, headers):
-    response = session.get("https://uae.texaschicken.com/en/Locations").text
-    lines = response.split("\n")
-
     locs = []
-    for line in lines:
+    url = "https://pakistan.texaschicken.com/Location"
+    with SgChrome(is_headless=False) as driver:
+        driver.get(url)
+        response = driver.page_source
+        soup = bs(response, "html.parser")
+        grids = soup.find_all("li", attrs={"class": "location-item"})
 
-        if "markers.push" in line:
-            line = (
-                line.replace("markers.push([", "")
-                .replace("]);", "")
-                .strip()
-                .replace("\t", "")
-                .replace("\r", "")
-                .replace("'", "")
-                .split(",")
-            )
+        for grid in grids:
+            locator_domain = "https://uae.texaschicken.com/"
+            page_url = "https://uae.texaschicken.com/Locations"
+            location_name = grid.find("a").text.strip()
+            latitude = "<MISSING>"
+            longitude = "<MISSING>"
+            
+            raw_address = grid.find("p", attrs={"class": "location-item-desc"}).text.strip()
+            addr = parse_address_intl(raw_address)
+            city = addr.city
+            if city is None:
+                city = "<MISSING>"
 
-            locator_domain = "uae.texaschicken.com"
-            page_url = "https://uae.texaschicken.com/en/Locations"
-            location_name = line[0]
-            latitude = line[1]
-            longitude = line[2]
-            store_number = line[-1].strip()
+            address_1 = addr.street_address_1
+            address_2 = addr.street_address_2
 
-            params = {
-                "ID": int(store_number),
-                "Text": "",
-                "isDelivery": "",
-                "isWifi": "",
-                "isDrive": "",
-                "isKidsArea": "",
-                "isHandicap": "",
-                "isHours": "",
-                "_isMall": "",
-                "_isBreakfast": "",
-                "_isfacility": "",
-                "_isfacility2": "",
-                "_isfacility3": "",
-                "lang": "en",
-            }
-
-            location_response = session.post(
-                "https://uae.texaschicken.com/Locations/AjaxSearch",
-                headers=headers,
-                json=params,
-            ).text
-            location_soup = bs(location_response, "html.parser")
-            phone_check = location_soup.find_all("p", attrs={"class": "font-15"})[-1]
-            if "phone" in phone_check.text.strip().lower():
-                phone = phone_check.text.strip().lower().replace("phone:", "").strip()
-
+            if address_1 is None and address_2 is None:
+                address = "<MISSING>"
             else:
-                phone = "<MISSING>"
-            address_parts = (
-                location_soup.find("div", attrs={"class": "col-md-12"})
-                .find_all("p")[-1]
-                .text.strip()
-                .replace('"', "")
-                .split(", ")
-            )
-            raw_address = (
-                location_soup.find("div", attrs={"class": "col-md-12"})
-                .find_all("p")[-1]
-                .text.strip()
-                .replace('"', "")
-            )
+                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
 
-            address = "".join(part + " " for part in address_parts[:-2])
+            state = addr.state
+            if state is None:
+                state = "<MISSING>"
 
-            if address == "":
-                address = "".join(part + " " for part in address_parts)
+            zipp = addr.postcode
+            if zipp is None:
+                zipp = "<MISSING>"
 
-            city = "<MISSING>"
-            state = "<MISSING>"
-            zipp = "<MISSING>"
-            country_code = "United Arab Emirates"
+            country_code = addr.country
+            if country_code is None:
+                country_code = "<MISSING>"
+            store_number = "<MISSING>"
             location_type = "<MISSING>"
-            hours = (
-                location_soup.find("p", attrs={"class": "font-15"})
-                .text.strip()
-                .replace("Opening ", "")
-                .replace("\r", " ")
-                .replace("\n", " ")
-                .replace("\t", " ")
-                .replace("                          ", " ")
-            )
 
-            if hours.lower() == "daily: closed":
-                continue
+            phone = grid.find("p", attrs={"class": "location-item-number"}).text.strip().split(":")[1].strip()
+            hours = grid.find("p", attrs={"class": "location-item-days"}).text.strip().lower().split("hours:")[1].strip()
+
+
+            country_code = "AE"
+
             locs.append(
                 {
                     "locator_domain": locator_domain,
@@ -664,8 +520,6 @@ def scrape_uae(session, headers):
                     "raw_address": raw_address,
                 }
             )
-
-    return locs
 
 
 def scrape_newzealand(session, headers):
@@ -1227,11 +1081,11 @@ def get_data():
         elif country == "Riyadh & Eastern KSA":
             continue
 
-        # elif country == "United Arab Emirates":
-        #     locs = scrape_uae(session, headers)
+        elif country == "United Arab Emirates":
+            locs = scrape_uae(session, headers)
 
-        #     for loc in locs:
-        #         yield loc
+            for loc in locs:
+                yield loc
 
         elif country == "New Zealand":
             locs = scrape_newzealand(session, headers)
