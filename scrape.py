@@ -103,7 +103,7 @@ def scrape_singapore(session, headers):
             print(page_url)
             driver.get(page_url)
             time.sleep(10)
-            driver.switch_to.frame(driver.find_element_by_tag_name("iframe"))
+            driver.switch_to.frame(driver.find_element("tag", "iframe"))
             location_response = driver.page_source
             with open("file.txt", "w", encoding="utf-8") as output:
                 print(location_response, file=output)
@@ -233,7 +233,7 @@ def scrape_bahrain(session, headers):
             print(page_url)
             driver.get(page_url)
             time.sleep(10)
-            driver.switch_to.frame(driver.find_element_by_tag_name("iframe"))
+            driver.switch_to.frame(driver.find_element("tag", "iframe"))
             location_response = driver.page_source
             with open("file.txt", "w", encoding="utf-8") as output:
                 print(location_response, file=output)
@@ -687,7 +687,7 @@ def scrape_newzealand(session, headers):
             print(page_url)
             driver.get(page_url)
             time.sleep(10)
-            driver.switch_to.frame(driver.find_element_by_tag_name("iframe"))
+            driver.switch_to.frame(driver.find_element("tag", "iframe"))
             location_response = driver.page_source
             with open("file.txt", "w", encoding="utf-8") as output:
                 print(location_response, file=output)
@@ -1129,7 +1129,7 @@ def scrape_qatar(session, headers):
             print(page_url)
             driver.get(page_url)
             time.sleep(10)
-            driver.switch_to.frame(driver.find_element_by_tag_name("iframe"))
+            driver.switch_to.frame(driver.find_element("tag", "iframe"))
             location_response = driver.page_source
             with open("file.txt", "w", encoding="utf-8") as output:
                 print(location_response, file=output)
