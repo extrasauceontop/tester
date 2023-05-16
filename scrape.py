@@ -2,8 +2,6 @@ from sgrequests import SgRequests
 from bs4 import BeautifulSoup as bs
 from sgscrape import simple_scraper_pipeline as sp
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from sgselenium.sgselenium import SgChrome
 import ssl
 from sgscrape.sgrecord_deduper import SgRecordDeduper
@@ -13,7 +11,7 @@ from sgscrape.sgrecord_id import SgRecordID
 import html
 import unidecode
 import time
-from selenium.webdriver.common.by import By
+from sgpostal.sgpostal import parse_address_intl
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -85,7 +83,32 @@ def scrape_singapore(session, headers):
             page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
             raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
-            city = state = zipp = address = "<LATER>"
+            
+            addr = parse_address_intl(raw_address)
+            city = addr.city
+            if city is None:
+                city = "<MISSING>"
+
+            address_1 = addr.street_address_1
+            address_2 = addr.street_address_2
+
+            if address_1 is None and address_2 is None:
+                address = "<MISSING>"
+            else:
+                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+
+            state = addr.state
+            if state is None:
+                state = "<MISSING>"
+
+            zipp = addr.postcode
+            if zipp is None:
+                zipp = "<MISSING>"
+
+            country_code = addr.country
+            if country_code is None:
+                country_code = "<MISSING>"
+
             store_number = "<MISSING>"
             
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
@@ -215,7 +238,30 @@ def scrape_bahrain(session, headers):
             page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
             raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
-            city = state = zipp = address = "<LATER>"
+            addr = parse_address_intl(raw_address)
+            city = addr.city
+            if city is None:
+                city = "<MISSING>"
+
+            address_1 = addr.street_address_1
+            address_2 = addr.street_address_2
+
+            if address_1 is None and address_2 is None:
+                address = "<MISSING>"
+            else:
+                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+
+            state = addr.state
+            if state is None:
+                state = "<MISSING>"
+
+            zipp = addr.postcode
+            if zipp is None:
+                zipp = "<MISSING>"
+
+            country_code = addr.country
+            if country_code is None:
+                country_code = "<MISSING>"
             store_number = "<MISSING>"
             
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
@@ -669,7 +715,30 @@ def scrape_newzealand(session, headers):
             page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
             raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
-            city = state = zipp = address = "<LATER>"
+            addr = parse_address_intl(raw_address)
+            city = addr.city
+            if city is None:
+                city = "<MISSING>"
+
+            address_1 = addr.street_address_1
+            address_2 = addr.street_address_2
+
+            if address_1 is None and address_2 is None:
+                address = "<MISSING>"
+            else:
+                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+
+            state = addr.state
+            if state is None:
+                state = "<MISSING>"
+
+            zipp = addr.postcode
+            if zipp is None:
+                zipp = "<MISSING>"
+
+            country_code = addr.country
+            if country_code is None:
+                country_code = "<MISSING>"
             store_number = "<MISSING>"
             
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
@@ -1111,7 +1180,30 @@ def scrape_qatar(session, headers):
             page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
             raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
-            city = state = zipp = address = "<LATER>"
+            addr = parse_address_intl(raw_address)
+            city = addr.city
+            if city is None:
+                city = "<MISSING>"
+
+            address_1 = addr.street_address_1
+            address_2 = addr.street_address_2
+
+            if address_1 is None and address_2 is None:
+                address = "<MISSING>"
+            else:
+                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+
+            state = addr.state
+            if state is None:
+                state = "<MISSING>"
+
+            zipp = addr.postcode
+            if zipp is None:
+                zipp = "<MISSING>"
+
+            country_code = addr.country
+            if country_code is None:
+                country_code = "<MISSING>"
             store_number = "<MISSING>"
             
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
