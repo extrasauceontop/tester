@@ -453,7 +453,7 @@ def scrape_pakistan(session, headers):
 
 def scrape_uae(session, headers):
     locs = []
-    url = "https://pakistan.texaschicken.com/Location"
+    url = "https://uae.texaschicken.com/Locations"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         time.sleep(10)
