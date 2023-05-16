@@ -1046,6 +1046,7 @@ def get_data():
         country_list.append(item)
 
     for country in country_list:
+        print(country)
         # if country == "Malaysia":
         #     locs = scrape_malaysia(session, headers)
 
@@ -1153,8 +1154,8 @@ def scrape():
         deduper=SgRecordDeduper(
             SgRecordID(
                 {
-                    SgRecord.Headers.LATITUDE,
-                    SgRecord.Headers.LONGITUDE,
+                    SgRecord.Headers.STREET_ADDRESS,
+                    SgRecord.Headers.CITY,
                     SgRecord.Headers.PAGE_URL,
                     SgRecord.Headers.LOCATION_NAME,
                 }
