@@ -456,7 +456,9 @@ def scrape_uae(session, headers):
     url = "https://pakistan.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
+        time.sleep(10)
         response = driver.page_source
+        print(response)
         soup = bs(response, "html.parser")
         grids = soup.find_all("li", attrs={"class": "location-item"})
         print(len(grids))
