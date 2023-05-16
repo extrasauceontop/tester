@@ -497,8 +497,6 @@ def scrape_uae(session, headers):
 
             phone = grid.find("p", attrs={"class": "location-item-number"}).text.strip().split(":")[1].strip()
             hours = grid.find("p", attrs={"class": "location-item-days"}).text.strip().lower().split("hours:")[1].strip()
-
-
             country_code = "AE"
 
             locs.append(
