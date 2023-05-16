@@ -1039,6 +1039,7 @@ def get_data():
 
     country_list = []
     for item in frosting_list:
+        print(item)
         country_list.append(item)
 
     for item in mustard_list:
