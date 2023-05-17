@@ -68,22 +68,28 @@ def scrape_malaysia(session, headers):
     return locs
 
 
-def scrape_singapore(session, headers):
+def scrape_singapore():
     locs = []
     url = "https://sg.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://sg.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
-            
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
+
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -95,7 +101,12 @@ def scrape_singapore(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -110,27 +121,25 @@ def scrape_singapore(session, headers):
                 country_code = "<MISSING>"
 
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -159,25 +168,31 @@ def scrape_singapore(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_bahrain(session, headers):
+def scrape_bahrain():
     locs = []
     url = "https://bahrain.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://bahrain.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -189,7 +204,12 @@ def scrape_bahrain(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -203,29 +223,25 @@ def scrape_bahrain(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -234,7 +250,6 @@ def scrape_bahrain(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "BH"
-            
 
             locs.append(
                 {
@@ -255,25 +270,31 @@ def scrape_bahrain(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_jordan(session, headers):
+def scrape_jordan():
     locs = []
     url = "https://jordan.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://jordan.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -285,7 +306,12 @@ def scrape_jordan(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -299,29 +325,25 @@ def scrape_jordan(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -330,7 +352,6 @@ def scrape_jordan(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "JO"
-            
 
             locs.append(
                 {
@@ -351,25 +372,31 @@ def scrape_jordan(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_pakistan(session, headers):
+def scrape_pakistan():
     locs = []
     url = "https://pakistan.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://pakistan.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -381,7 +408,12 @@ def scrape_pakistan(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -395,29 +427,25 @@ def scrape_pakistan(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -426,7 +454,6 @@ def scrape_pakistan(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "PK"
-            
 
             locs.append(
                 {
@@ -447,29 +474,29 @@ def scrape_pakistan(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_uae(session, headers):
+def scrape_uae():
     locs = []
     url = "https://uae.texaschicken.com/Locations"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         time.sleep(10)
         response = driver.page_source
-        print(response)
         soup = bs(response, "html.parser")
         grids = soup.find_all("li", attrs={"class": "location-item"})
-        print(len(grids))
         for grid in grids:
             locator_domain = "https://uae.texaschicken.com/"
             page_url = "https://uae.texaschicken.com/Locations"
             location_name = grid.find("a").text.strip()
             latitude = "<MISSING>"
             longitude = "<MISSING>"
-            
-            raw_address = grid.find("p", attrs={"class": "location-item-desc"}).text.strip()
+
+            raw_address = grid.find(
+                "p", attrs={"class": "location-item-desc"}
+            ).text.strip()
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -481,7 +508,12 @@ def scrape_uae(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -497,8 +529,19 @@ def scrape_uae(session, headers):
             store_number = "<MISSING>"
             location_type = "<MISSING>"
 
-            phone = grid.find("p", attrs={"class": "location-item-number"}).text.strip().split(":")[1].strip()
-            hours = grid.find("p", attrs={"class": "location-item-days"}).text.strip().lower().split("hours:")[1].strip()
+            phone = (
+                grid.find("p", attrs={"class": "location-item-number"})
+                .text.strip()
+                .split(":")[1]
+                .strip()
+            )
+            hours = (
+                grid.find("p", attrs={"class": "location-item-days"})
+                .text.strip()
+                .lower()
+                .split("hours:")[1]
+                .strip()
+            )
             country_code = "AE"
 
             locs.append(
@@ -520,25 +563,31 @@ def scrape_uae(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_newzealand(session, headers):
+def scrape_newzealand():
     locs = []
     url = "https://nz.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://nz.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -550,7 +599,12 @@ def scrape_newzealand(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -564,29 +618,25 @@ def scrape_newzealand(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -595,7 +645,6 @@ def scrape_newzealand(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "NZ"
-            
 
             locs.append(
                 {
@@ -616,25 +665,31 @@ def scrape_newzealand(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_oman(session, headers):
+def scrape_oman():
     locs = []
     url = "https://oman.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://oman.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -646,7 +701,12 @@ def scrape_oman(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -660,29 +720,25 @@ def scrape_oman(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -691,7 +747,6 @@ def scrape_oman(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "OM"
-            
 
             locs.append(
                 {
@@ -712,25 +767,31 @@ def scrape_oman(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_ksa(session, headers):
+def scrape_ksa():
     locs = []
     url = "https://ksa.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://ksa.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -742,7 +803,12 @@ def scrape_ksa(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -756,29 +822,25 @@ def scrape_ksa(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -787,7 +849,6 @@ def scrape_ksa(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "SA"
-            
 
             locs.append(
                 {
@@ -808,25 +869,31 @@ def scrape_ksa(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_iraq(session, headers):
+def scrape_iraq():
     locs = []
     url = "https://iraq.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://iraq.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -838,7 +905,12 @@ def scrape_iraq(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -852,29 +924,25 @@ def scrape_iraq(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -883,7 +951,6 @@ def scrape_iraq(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "IQ"
-            
 
             locs.append(
                 {
@@ -904,25 +971,31 @@ def scrape_iraq(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
-def scrape_qatar(session, headers):
+def scrape_qatar():
     locs = []
     url = "https://qatar.texaschicken.com/Location"
     with SgChrome(is_headless=False) as driver:
         driver.get(url)
         response = driver.page_source
-    
+
         soup = bs(response, "html.parser")
         grids = soup.find_all("div", attrs={"class": "row p-5 MapInfo"})
-        
+
         for grid in grids:
             locator_domain = "https://qatar.texaschicken.com"
-            page_url = locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            page_url = (
+                locator_domain + grid.find("p", attrs={"class": "h4"}).find("a")["href"]
+            )
             location_name = grid.find("p", attrs={"class": "h4"}).text.strip()
-            raw_address = grid.find("div", attrs={"class": "col-md-12"}).find_all("p")[1].text.strip()
+            raw_address = (
+                grid.find("div", attrs={"class": "col-md-12"})
+                .find_all("p")[1]
+                .text.strip()
+            )
             addr = parse_address_intl(raw_address)
             city = addr.city
             if city is None:
@@ -934,7 +1007,12 @@ def scrape_qatar(session, headers):
             if address_1 is None and address_2 is None:
                 address = "<MISSING>"
             else:
-                address = (str(address_1) + " " + str(address_2)).strip().replace("None", "").strip()
+                address = (
+                    (str(address_1) + " " + str(address_2))
+                    .strip()
+                    .replace("None", "")
+                    .strip()
+                )
 
             state = addr.state
             if state is None:
@@ -948,29 +1026,25 @@ def scrape_qatar(session, headers):
             if country_code is None:
                 country_code = "<MISSING>"
             store_number = "<MISSING>"
-            
+
             phone_hours_check = grid.find_all("p", attrs={"class": "font-15"})
             phone = "<MISSING>"
             hours = "<MISSING>"
             for check in phone_hours_check:
                 if "number" in check.text.strip().lower():
                     phone = check.text.strip().split(":")[-1].strip()
-                
+
                 if "opening" in check.text.strip().lower():
                     hours = check.text.strip().lower().split("opening ")[-1]
-
 
             if hours.strip().lower() == "daily:":
                 hours = "<MISSING>"
             hours = hours.replace("\n", " ").strip()
-            print(page_url)
             driver.get(page_url)
             time.sleep(10)
             driver.switch_to.frame(driver.find_element(By.TAG_NAME, "iframe"))
             location_response = driver.page_source
-            with open("file.txt", "w", encoding="utf-8") as output:
-                print(location_response, file=output)
-            
+
             try:
                 lat_lon_parts = location_response.split("?ll=")[1].split("&")[0]
                 latitude = lat_lon_parts.split(",")[0]
@@ -979,7 +1053,6 @@ def scrape_qatar(session, headers):
                 latitude = longitude = "<MISSING>"
             location_type = "<MISSING>"
             country_code = "QA"
-            
 
             locs.append(
                 {
@@ -1000,7 +1073,7 @@ def scrape_qatar(session, headers):
                     "raw_address": raw_address,
                 }
             )
-    
+
     return locs
 
 
@@ -1041,7 +1114,6 @@ def get_data():
 
     country_list = []
     for item in frosting_list:
-        print(item)
         country_list.append(item)
 
     for item in mustard_list:
@@ -1051,78 +1123,78 @@ def get_data():
         country_list.append(item)
 
     for country in country_list:
-        print(country)
         if country == "Malaysia":
             locs = scrape_malaysia(session, headers)
 
             for loc in locs:
                 yield loc
 
-        # if country == "Singapore":
-        #     locs = scrape_singapore(session, headers)
-
-        #     for loc in locs:
-        #         yield loc
-
-        # elif country == "Bahrain":
-        #     locs = scrape_bahrain(session, headers)
-
-        #     for loc in locs:
-        #         yield loc
-
-        # elif country == "Jordan":
-        #     locs = scrape_jordan(session, headers)
-
-        #     for loc in locs:
-        #         yield loc
-
-        # elif country == "Pakistan":
-        #     locs = scrape_pakistan(session, headers)
-
-        #     for loc in locs:
-        #         yield loc
-
-        # elif country == "Riyadh & Eastern KSA":
-        #     continue
-
-        if country == "United Arab Emirates":
-            locs = scrape_uae(session, headers)
+        elif country == "Singapore":
+            locs = scrape_singapore()
 
             for loc in locs:
                 yield loc
 
-        # elif country == "New Zealand":
-        #     locs = scrape_newzealand(session, headers)
+        elif country == "Bahrain":
+            locs = scrape_bahrain()
 
-        #     for loc in locs:
-        #         yield loc
+            for loc in locs:
+                yield loc
 
-        # elif country == "Oman":
-        #     locs = scrape_oman(session, headers)
+        elif country == "Jordan":
+            locs = scrape_jordan()
 
-        #     for loc in locs:
-        #         yield loc
+            for loc in locs:
+                yield loc
 
-        # elif country == "Western KSA":
-        #     locs = scrape_ksa(session, headers)
+        elif country == "Pakistan":
+            locs = scrape_pakistan()
 
-        #     for loc in locs:
-        #         yield loc
+            for loc in locs:
+                yield loc
 
-        # elif country == "Iraq":
-        #     locs = scrape_iraq(session, headers)
+        elif country == "Riyadh & Eastern KSA":
+            continue
 
-        #     for loc in locs:
-        #         yield loc
+        elif country == "United Arab Emirates":
+            locs = scrape_uae()
 
-        # elif country == "Qatar":
-        #     locs = scrape_qatar(session, headers)
+            for loc in locs:
+                yield loc
 
-        #     for loc in locs:
-        #         yield loc
+        elif country == "New Zealand":
+            locs = scrape_newzealand()
 
-        # else:
-        #     print(country)
+            for loc in locs:
+                yield loc
+
+        elif country == "Oman":
+            locs = scrape_oman()
+
+            for loc in locs:
+                yield loc
+
+        elif country == "Western KSA":
+            locs = scrape_ksa()
+
+            for loc in locs:
+                yield loc
+
+        elif country == "Iraq":
+            locs = scrape_iraq()
+
+            for loc in locs:
+                yield loc
+
+        elif country == "Qatar":
+            locs = scrape_qatar()
+
+            for loc in locs:
+                yield loc
+
+        else:
+            print(country)
+            raise Exception
 
 
 def fix_location_name(loc):
