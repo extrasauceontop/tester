@@ -1052,11 +1052,11 @@ def get_data():
 
     for country in country_list:
         print(country)
-        # if country == "Malaysia":
-        #     locs = scrape_malaysia(session, headers)
+        if country == "Malaysia":
+            locs = scrape_malaysia(session, headers)
 
-        #     for loc in locs:
-        #         yield loc
+            for loc in locs:
+                yield loc
 
         # if country == "Singapore":
         #     locs = scrape_singapore(session, headers)
