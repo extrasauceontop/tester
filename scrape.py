@@ -12,7 +12,7 @@ url = "https://www.newworld.co.nz/"
 with SgFirefox(
     is_headless=False,
     proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-au:{}@proxy.apify.com:8000/"],
-    # response_successful=check_response
+    response_successful=check_response
 ) as driver:
     driver.get(url)
     response = driver.page_source
