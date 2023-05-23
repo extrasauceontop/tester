@@ -38,7 +38,7 @@ if "Just a moment..." not in response:
 with SgChromeWithoutSeleniumWire(
     is_headless=False,
     proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-nz:{}@proxy.apify.com:8000/"],
-    response_meets_expectations=check_response
+    page_meets_expectations=check_response
 ) as driver:
     driver.get(url)
     response = driver.page_source
@@ -90,7 +90,7 @@ if "Just a moment..." not in response:
 with SgChromeWithoutSeleniumWire(
     is_headless=True,
     proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-nz:{}@proxy.apify.com:8000/"],
-    response_meets_expectations=check_response
+    page_meets_expectations=check_response
 ) as driver:
     driver.get(url)
     response = driver.page_source
@@ -144,7 +144,7 @@ if "Just a moment..." not in response:
 with SgChromeWithoutSeleniumWire(
     is_headless=False,
     proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-nz:{}@proxy.apify.com:8000/"],
-    response_meets_expectations=check_response,
+    page_meets_expectations=check_response,
     block_third_parties=False
 ) as driver:
     driver.get(url)
