@@ -8,6 +8,15 @@ import json
 import re
 
 
+def check_response(dresponse): # noqa
+    response = driver.page_source
+    if "Just a moment..." in response:
+        return False
+    
+    return True
+
+
+
 def extract_json(html_string):
     json_objects = []
     count = 0
@@ -35,83 +44,80 @@ def extract_json(html_string):
 
 def get_data():
     url = "https://www.maisonbirks.com/on/demandware.store/Sites-maison-birks-ca-Site/en_CA/Stores-FindStores?radius=3000000"
-    with SgChrome(
-        is_headless=False,
-    ) as driver:
-        driver.get(url)
-        response = driver.page_source
-        print(response)
-        json_objects = extract_json(response)
-        for location in json_objects[0]["stores"]:
-            locator_domain = "https://www.maisonbirks.com/"
-            page_url = (
-                "https://www.maisonbirks.com/en_ca/store-details?storeID="
-                + location["ID"]
-            )
-            location_name = location["name"]
-            latitude = location["latitude"]
-            longitude = location["longitude"]
-            city = location["city"]
-            address = (
-                location["address1"] + " " + location["address2"]
-                if location["address2"] is not None
-                else location["address1"]
-            )
-            state = (
-                location.get("stateCode")
-                if location.get("stateCode") is not None
-                else "<MISSING>"
-            )
-            zipp = location["postalCode"]
-            store_number = "<MISSING>"
-            phone = (
-                location.get("phone")
-                if location.get("phone") is not None
-                else "<MISSING>"
-            )
-            location_type = "<MISSING>"
-            country_code = (
-                location["countryCode"]
-                if location["countryCode"] != ""
-                else "<MISSING>"
-            )
+    driver.get(url)
+    response = driver.page_source
+    print(response)
+    json_objects = extract_json(response)
+    for location in json_objects[0]["stores"]:
+        locator_domain = "https://www.maisonbirks.com/"
+        page_url = (
+            "https://www.maisonbirks.com/en_ca/store-details?storeID="
+            + location["ID"]
+        )
+        location_name = location["name"]
+        latitude = location["latitude"]
+        longitude = location["longitude"]
+        city = location["city"]
+        address = (
+            location["address1"] + " " + location["address2"]
+            if location["address2"] is not None
+            else location["address1"]
+        )
+        state = (
+            location.get("stateCode")
+            if location.get("stateCode") is not None
+            else "<MISSING>"
+        )
+        zipp = location["postalCode"]
+        store_number = "<MISSING>"
+        phone = (
+            location.get("phone")
+            if location.get("phone") is not None
+            else "<MISSING>"
+        )
+        location_type = "<MISSING>"
+        country_code = (
+            location["countryCode"]
+            if location["countryCode"] != ""
+            else "<MISSING>"
+        )
 
-            hours_parts = (
-                location.get("storeTimings")
-                if bool(location.get("storeTimings")) is not False
-                else "<MISSING>"
-            )
-            if hours_parts == "<MISSING>":
-                hours = "<MISSING>"
+        hours_parts = (
+            location.get("storeTimings")
+            if bool(location.get("storeTimings")) is not False
+            else "<MISSING>"
+        )
+        if hours_parts == "<MISSING>":
+            hours = "<MISSING>"
 
-            else:
-                hours = ""
-                for key in hours_parts.keys():
-                    hours = hours + hours_parts[key].replace("|", " ") + ", "
-                hours = hours[:-2]
+        else:
+            hours = ""
+            for key in hours_parts.keys():
+                hours = hours + hours_parts[key].replace("|", " ") + ", "
+            hours = hours[:-2]
 
-            if str(zipp) == "None" or zipp is None:
-                zipp = "<MISSING>"
+        if str(zipp) == "None" or zipp is None:
+            zipp = "<MISSING>"
 
-            if bool(re.search(r"\d", state)) is True:
-                state = "<MISSING>"
+        if bool(re.search(r"\d", state)) is True:
+            state = "<MISSING>"
 
-            yield {
-                "locator_domain": locator_domain,
-                "page_url": page_url,
-                "location_name": location_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "city": city,
-                "street_address": address,
-                "state": state,
-                "zip": zipp,
-                "store_number": store_number,
-                "phone": phone,
-                "location_type": location_type,
-                "hours": hours,
-                "country_code": country_code,
-            }
+        yield {
+            "locator_domain": locator_domain,
+            "page_url": page_url,
+            "location_name": location_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "city": city,
+            "street_address": address,
+            "state": state,
+            "zip": zipp,
+            "store_number": store_number,
+            "phone": phone,
+            "location_type": location_type,
+            "hours": hours,
+            "country_code": country_code,
+        }
 
 
 def scrape():
@@ -159,4 +165,9 @@ def scrape():
 
 
 if __name__ == "__main__":
-    scrape()
+    with SgChrome(
+        is_headless=False,
+        proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-us:{}@proxy.apify.com:8000/"],
+        response_successful=check_response
+    ) as driver:
+        scrape()
