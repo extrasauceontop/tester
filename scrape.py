@@ -102,8 +102,7 @@ if "Just a moment..." not in response:
 
 with SgChromeForCloudFlare(
     is_headless=True,
-    proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-nz:{}@proxy.apify.com:8000/"],
-    response_successful=check_response
+    proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-nz:{}@proxy.apify.com:8000/"], 
 ) as driver:
     driver.get(url)
     response = driver.page_source
