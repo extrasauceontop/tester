@@ -40,6 +40,7 @@ def get_data():
     ) as driver:
         driver.get(url)
         response = driver.page_source
+        print(response)
         json_objects = extract_json(response)
         for location in json_objects[0]["stores"]:
             locator_domain = "https://www.maisonbirks.com/"
