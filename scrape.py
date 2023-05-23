@@ -18,7 +18,8 @@ with SgFirefox(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(1)
+    print(response)
     raise Exception
 
 with SgChrome(
@@ -30,7 +31,8 @@ with SgChrome(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(2)
+    print(response)
     raise Exception
 
 with SgChromeWithoutSeleniumWire(
@@ -42,7 +44,8 @@ with SgChromeWithoutSeleniumWire(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(3)
+    print(response)
     raise Exception
 
 with SgChromeForCloudFlare(
@@ -54,7 +57,8 @@ with SgChromeForCloudFlare(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(4)
+    print(response)
     raise Exception
 
 with SgFirefox(
@@ -66,7 +70,8 @@ with SgFirefox(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(5)
+    print(response)
     raise Exception
 
 with SgChrome(
@@ -78,7 +83,8 @@ with SgChrome(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(6)
+    print(response)
     raise Exception
 
 with SgChromeWithoutSeleniumWire(
@@ -90,7 +96,8 @@ with SgChromeWithoutSeleniumWire(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(7)
+    print(response)
     raise Exception
 
 with SgChromeForCloudFlare(
@@ -102,7 +109,8 @@ with SgChromeForCloudFlare(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(8)
+    print(response)
     raise Exception
 
 with SgFirefox(
@@ -115,7 +123,8 @@ with SgFirefox(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(9)
+    print(response)
     raise Exception
 
 with SgChrome(
@@ -128,7 +137,8 @@ with SgChrome(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(10)
+    print(response)
     raise Exception
 
 with SgChromeWithoutSeleniumWire(
@@ -141,7 +151,8 @@ with SgChromeWithoutSeleniumWire(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(11)
+    print(response)
     raise Exception
 
 with SgChromeForCloudFlare(
@@ -154,5 +165,6 @@ with SgChromeForCloudFlare(
     response = driver.page_source
 
 if "Just a moment..." not in response:
-    print("SUCCESS")
+    print(12)
+    print(response)
     raise Exception
