@@ -1,26 +1,31 @@
 from sgselenium import SgChromeWithoutSeleniumWire, SgChrome, SgChromeForCloudFlare, SgFirefox
-
+from sgplaywright import SgPlaywright
 
 def check_response(dresponse):
-    response = driver.page_source
+    response = driver.content
     if "Just a moment..." in response:
         return False
     return True
 
-
 url = "https://www.newworld.co.nz/"
-with SgFirefox(
-    is_headless=False,
-    proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-au:{}@proxy.apify.com:8000/"],
-    response_successful=check_response
-) as driver:
-    driver.get(url)
-    response = driver.page_source
+with SgPlaywright(proxy_country='nz', headless=False, response_successful=check_response).firefox() as driver:
+    driver.goto(url)
+    print(driver.content)
 
-if "Just a moment..." not in response:
-    print(1)
-    print(response)
-    raise Exception
+
+# url = "https://www.newworld.co.nz/"
+# with SgFirefox(
+#     is_headless=False,
+#     proxy_provider_escalation_order=["http://groups-RESIDENTIAL,country-au:{}@proxy.apify.com:8000/"],
+#     response_successful=check_response
+# ) as driver:
+#     driver.get(url)
+#     response = driver.page_source
+
+# if "Just a moment..." not in response:
+#     print(1)
+#     print(response)
+#     raise Exception
 
 # with SgChrome(
 #     is_headless=False,
