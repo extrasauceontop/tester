@@ -8,6 +8,9 @@ from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord_id import RecommendedRecordIds
 from sgscrape.sgpostal import parse_address, International_Parser
+import os
+
+os.system('DEFAULT_PROXY_ESCALATION_ORDER="http://groups-RESIDENTIAL,country-nz:{}@proxy.apify.com:8000/"')
 
 
 def parse_international(raw_address: str) -> tuple:
@@ -127,3 +130,4 @@ if __name__ == "__main__":
     log = SgLogSetup().get_logger(logger_name="newworld.co.nz")
     with SgWriter(SgRecordDeduper(RecommendedRecordIds.PageUrlId)) as sgw:
         get_data()
+
