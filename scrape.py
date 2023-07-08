@@ -9,13 +9,14 @@ from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 import subprocess
 import sys
-
+import os
 subprocess.check_call([sys.executable, "-m", "pip", "install", "install-jdk"])
 import jdk
+jdk.install(20, jre=True, path="/usr/local/java")
+os.environ["JAVA_HOME"] = "/usr/local/java"
 import tabula as tb  # noqa
-jdk.install(20, jre=True)
-DOMAIN = "anderinger.com"
 
+DOMAIN = "anderinger.com"
 
 def write_output(data):
     with SgWriter(
