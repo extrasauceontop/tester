@@ -12,7 +12,7 @@ import sys
 import os
 subprocess.check_call([sys.executable, "-m", "pip", "install", "install-jdk"])
 import jdk
-jdk.install(20, jre=True, path="/usr/local/java")
+jdk.install(20, jre=True, path="")
 os.environ["JAVA_HOME"] = "/usr/local/java"
 import tabula as tb  # noqa
 
