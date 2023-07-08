@@ -14,7 +14,9 @@ subprocess.check_call([sys.executable, "-m", "pip", "install", "install-jdk"])
 import jdk
 jdk.install(20, jre=True, path="/usr/lib/java/")
 os.environ["JAVA_HOME"] = "/usr/lib/java/"
-os.system("SETX {0} {1} /M".format("JAVA_HOME", "/usr/lib/java/"))
+os.system("ENV JAVA_HOME /usr/lib/jvm/")
+os.system("RUN export JAVA_HOME")
+
 import tabula as tb  # noqa
 
 DOMAIN = "anderinger.com"
