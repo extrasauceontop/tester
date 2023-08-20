@@ -1,221 +1,230 @@
-import re
-from io import BytesIO
-from bs4 import BeautifulSoup
+# -*- coding: utf-8 -*-
 from sgrequests import SgRequests
-from sgpostal.sgpostal import USA_Best_Parser, parse_address
+from sglogging import sglog
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
 from sgscrape.sgrecord_deduper import SgRecordDeduper
-import subprocess
-import sys
-import os
-subprocess.check_call([sys.executable, "-m", "pip", "install", "install-jdk"])
-import jdk
-jdk.install(20, jre=True, path="/usr/lib/java/")
-os.environ["JAVA_HOME"] = "/usr/lib/java/"
-os.system("ENV JAVA_HOME /usr/lib/jvm/")
-os.system("RUN export JAVA_HOME")
+from sgscrape.pause_resume import SerializableRequest, CrawlState, CrawlStateSingleton
+import lxml.html
+import pypdfium2 as pdfium
+from io import BytesIO
+from sgpostal import sgpostal as parser
 
-import tabula as tb  # noqa
+website = "yayoiken.com"
+log = sglog.SgLogSetup().get_logger(logger_name=website)
 
-DOMAIN = "anderinger.com"
+headers = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "en-US,en-GB;q=0.9,en;q=0.8",
+    "Cache-Control": "max-age=0",
+    "Connection": "keep-alive",
+    "Referer": "https://www.yayoiken.com/en/",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+    "sec-ch-ua": '"Chromium";v="110", "Not A(Brand";v="24", "Google Chrome";v="110"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+}
 
-def write_output(data):
-    with SgWriter(
-        SgRecordDeduper(
-            SgRecordID(
-                {
-                    SgRecord.Headers.STATE,
-                    SgRecord.Headers.LOCATION_NAME,
-                    SgRecord.Headers.PHONE,
-                }
-            )
-        )
-    ) as writer:
-        for row in data:
-            writer.write_row(row)
+base = "https://www.yayoiken.com"
 
 
-def read_pdf(pdf_url):
-    table_column_boundaries = [150, 300, 430, 580]
-    area = [0.0, 0.0, 800.0, 600.0]
-    with SgRequests() as session:
-        response = session.get(pdf_url, headers={"User-Agent": "PostmanRuntime/7.19.0"})
-        file = BytesIO(response.content)
-
-        dataframes = tb.read_pdf(
-            file,
-            pages="all",
-            area=area,
-            lattice=True,
-            columns=table_column_boundaries,
-        )
-
-    data = []
-    df = dataframes[0]
-    for column in range(0, len(df.columns)):
-        if not isinstance(df.iloc[0, column], str):
-            data.append(
-                df.columns[column]
-            )  # data parsed out as column name in pd dataframe
-        else:
-            data.append(df.iloc[0, column])
-
-    unformatted = "\n".join(data)
-    return re.sub("\r", "\n", unformatted)
+def record_initial_requests(http: SgRequests, state: CrawlState) -> bool:
+    search_url = "https://www.yayoiken.com/en/store/"
+    stores_req = http.get(search_url, headers=headers)
+    stores_sel = lxml.html.fromstring(stores_req.text)
+    stores = stores_sel.xpath('//ul[@class="c-page-sub-area__list"]//li/a/@href')
+    for store_url in stores:
+        store_url = base + store_url
+        state.push_request(SerializableRequest(url=store_url))
+    return True
 
 
-def group_by_state(data):
-    lines = data.split("\n")
+def get_address_tel(left, bottom, right, top, width, textpage, pagewidth):
+    text_part = textpage.get_text_bounded(left + width, bottom, pagewidth / 2, top)
+    return text_part
 
-    buckets = {}
-    current = None
-    for line in lines:
-        if line.isupper() and "PO BOX" not in line:
-            buckets[line] = []
-            current = buckets[line]
+
+def get_hours(left, bottom, right, top, width, textpage, pagewidth):
+    text_part = textpage.get_text_bounded(
+        pagewidth / 2, bottom, (pagewidth / 2) + width, top
+    )
+    return text_part
+
+
+def fetch_data(http, state):
+    # Your scraper here
+    for next_r in state.request_stack_iter():
+        page_url = next_r.url
+
+        if "_._" in page_url:  # skip it
             continue
 
-        current.append(line)
+        log.info(page_url)
+        store_req = http.get(page_url, headers=headers)
+        file = BytesIO(store_req.content)
+        pdf = pdfium.PdfDocument(file)
 
-    return buckets
+        stores = pypdfium(pdf)
+        for store in stores:
+            locator_domain = website
+            location_name = store[0]
+            location_type = "<MISSING>"
+            raw_address = store[1]
 
-
-def group_by_city(states):
-    cities = {}
-    current_state = None
-    current_city = None
-    current_city_data = None
-
-    for state, lines in states.items():
-        current_state = state
-        for idx, line in enumerate(lines):
+            # outlier below
             if (
-                re.search(r"–|warehous*|facility", line, flags=re.IGNORECASE)
-                or idx == 0
-            ):
-                if current_city_data:
-                    cities[current_city] = current_city_data
+                location_name == "Toyama Namerikawa"
+            ):  # https://www.yayoiken.com/en_files/shop_pdf/16_TOYAMA_en.pdf?id=3281
+                raw_address = "2814-2 Kamikoizumi, Namerikawa City, Toyama"
 
-                current_city = (
-                    f"{current_state.capitalize()} {line}"
-                    if re.search(r"warehous*", line, flags=re.IGNORECASE)
-                    else line
-                )
-                current_city = re.sub(r"\:|\;", "", current_city)
-
-                current_city_data = []
-                current_city_data.append(current_state)
-                current_city_data.append(line)
-
+            formatted_addr = parser.parse_address_intl(raw_address)
+            street_address = formatted_addr.street_address_1
+            if street_address:
+                if formatted_addr.street_address_2:
+                    street_address = (
+                        street_address + ", " + formatted_addr.street_address_2
+                    )
             else:
-                current_city_data.append(line)
+                if formatted_addr.street_address_2:
+                    street_address = formatted_addr.street_address_2
 
-            if idx == len(lines) - 1:
-                cities[current_city] = current_city_data
+            city = formatted_addr.city
+            statee = formatted_addr.state
+            zip = formatted_addr.postcode
 
-    return cities
+            country_code = "JP"
+            phone = store[2]
+            hours_of_operation = store[3]
 
+            store_number = "<MISSING>"
+            latitude, longitude = "<MISSING>", "<MISSING>"
 
-def get_phone(data):
-    for line in data:
-        if re.search(r"tel\s*:\s*", line, re.IGNORECASE):
-            return re.sub(r"tel\s*:\s*|\s*\|\s*.*", "", line, flags=re.IGNORECASE)
-
-
-def get_store_number(name):
-    if "–" in name:
-        parsed = name.split(" – ")
-        return parsed.pop()
-
-    return MISSING
-
-
-def get_location_type(data):
-    if re.search("headquarter", data[0], flags=re.IGNORECASE):
-        return "CORPORATE HEADQUARTERS"
-
-    return MISSING
-
-
-def get_address(data):
-    address = ",".join(data[2:4])
-
-    if "PO BOX" in address:
-        address = ",".join(data[4:6])
-
-    if re.search(r"(tel|fax)\s*:\s*", address, flags=re.IGNORECASE):
-        address = ""
-
-    return address
+            yield SgRecord(
+                locator_domain=locator_domain,
+                page_url=page_url,
+                location_name=location_name,
+                street_address=street_address,
+                city=city,
+                state=statee,
+                zip_postal=zip,
+                country_code=country_code,
+                store_number=store_number,
+                phone=phone,
+                location_type=location_type,
+                latitude=latitude,
+                longitude=longitude,
+                hours_of_operation=hours_of_operation,
+                raw_address=raw_address,
+            )
 
 
-MISSING = "<MISSING>"
+def pypdfium(pdf):
 
+    records = []
+    n_pages = len(pdf)
 
-def extract(name, data, pdf_url):
-    address = get_address(data)
+    for no in range(0, n_pages):
 
-    parsed_address = parse_address(USA_Best_Parser(), address)
+        page = pdf[no]
 
-    locator_domain = "anderinger.com"
-    page_url = pdf_url
-    location_name = name
-    street_address = parsed_address.street_address_1
-    if parsed_address.street_address_2:
-        street_address += f", {parsed_address.street_address_2}"
-    city = parsed_address.city
-    state = parsed_address.state
-    postal = parsed_address.postcode
-    country_code = parsed_address.country
-    store_number = get_store_number(name)
-    phone = get_phone(data)
-    location_type = get_location_type(data)
-    latitude = MISSING
-    longitude = MISSING
-    hours_of_operation = MISSING
+        width, height = page.get_size()
+        # page size ----> 1200.0      1552.739990234375
 
-    return SgRecord(
-        locator_domain=locator_domain,
-        page_url=page_url,
-        location_name=location_name,
-        street_address=street_address,
-        city=city,
-        state=state,
-        zip_postal=postal,
-        country_code=country_code,
-        store_number=store_number,
-        phone=phone,
-        location_type=location_type,
-        latitude=latitude,
-        longitude=longitude,
-        hours_of_operation=hours_of_operation,
-    )
+        page.set_rotation(90)
 
+        textpage = page.get_textpage()
 
-def fetch_data():
+        for idx in range(0, textpage.count_rects()):
+            l, b, r, t = textpage.get_rect(idx)
+            text_part = textpage.get_text_bounded(l, b, r, t)
+            if text_part.strip() in [
+                "Store name"
+            ]:  # ,"Address / TEL","Opening hours","Map" ]:
+                break
+        # Map -> header width = 32
+        # Store name -> header height = 12
 
-    base_link = "https://www.anderinger.com/about-deringer/locations/"
+        text = ""
+        left = int(l) - 32  # 156-32
+        bottom = int(b) - 13  # 1360-12
+        right = int(r) + 32  # 235+32
+        top = int(t) + 13  # 1372+12
+        column_height = 48
 
-    with SgRequests() as session:
-        req = session.get(base_link, headers={"User-Agent": "PostmanRuntime/7.19.0"})
-        base = BeautifulSoup(req.text, "lxml")
-        pdf_url = base.find(class_="entry-content").a["href"]
+        # just change decrease height
+        skip = 0
+        while "hours are subject" not in text:
 
-    data = read_pdf(pdf_url)
-    states = group_by_state(data)
-    locations = group_by_city(states)
+            if skip % 2 == 1:
+                bottom -= column_height + 9
+                top -= column_height + 6.5
+            else:
+                bottom -= column_height
+                top -= column_height
+            text = textpage.get_text_bounded(left, bottom, right, top)
 
-    for name, data in locations.items():
-        poi = extract(name, data, pdf_url)
-        if poi:
-            yield poi
+            skip += 1
+            if "hours are subject" in text:
+                break
+
+            name = text.replace("\n", " ").replace("\r", "").strip()
+
+            width_to_add = right - left
+            address_tel = get_address_tel(
+                left,
+                bottom,
+                right,
+                top,
+                width_to_add,
+                textpage=textpage,
+                pagewidth=width,
+            )
+            address_tel = list(
+                filter(str, [x.strip() for x in address_tel.strip().split("\n")])
+            )
+
+            raw_address = " ".join(address_tel[-2::-1]).strip()
+            tel = address_tel[-1].strip()
+
+            hours = get_hours(
+                left,
+                bottom,
+                right,
+                top,
+                width_to_add,
+                textpage=textpage,
+                pagewidth=width,
+            )
+            hours = hours.strip().replace("\n", "; ").replace("\r", "").strip()
+
+            records.append([name, raw_address, tel, hours])
+
+    return records
 
 
 def scrape():
-    data = fetch_data()
-    write_output(data)
+    log.info("Started")
+    count = 0
+    state = CrawlStateSingleton.get_instance()
+    http = SgRequests.mk_self_destructing_instance()
+
+    with SgWriter(
+        deduper=SgRecordDeduper(SgRecordID({SgRecord.Headers.RAW_ADDRESS}))
+    ) as writer:
+        state.get_misc_value(
+            "init", default_factory=lambda: record_initial_requests(http, state)
+        )
+        for rec in fetch_data(http, state):
+            writer.write_row(rec)
+            count = count + 1
+
+    log.info(f"No of records being processed: {count}")
+    log.info("Finished")
 
 
 if __name__ == "__main__":
