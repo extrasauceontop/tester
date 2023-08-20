@@ -1,7 +1,3 @@
 --index-url https://dl.cloudsmith.io/KVaWma76J5VNwrOm/crawl/crawl/python/simple/
-lxml==4.6.5
-sglogging==0.0.4
-sgpostal==0.1.0
-sgrequests==0.4.5
-sgscrape==0.7.4
+sgcrawl==1.8.0
 pypdfium2==4.3.0
