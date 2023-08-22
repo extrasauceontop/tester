@@ -38,7 +38,7 @@ def extract_json(html_string):
 def get_data():
     url = "https://www.newworld.co.nz/BrandsApi/BrandsStore/GetBrandStores"
     with SgPlaywright(
-        proxy_country="us",
+        proxy_country="au",
         headless=False,
 
     ).firefox() as driver:
