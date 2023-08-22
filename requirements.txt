@@ -1,3 +1,2 @@
 --index-url https://dl.cloudsmith.io/KVaWma76J5VNwrOm/crawl/crawl/python/simple/
 sgcrawl==1.8.0
-pypdfium2==4.3.0
