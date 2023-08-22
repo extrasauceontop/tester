@@ -41,7 +41,7 @@ def get_data():
         proxy_country="us",
         headless=False,
 
-    ).chrome() as driver:
+    ).firefox() as driver:
         driver.goto(url)
         time.sleep(60)
         response = driver.content()
