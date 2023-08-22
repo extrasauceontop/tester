@@ -1,87 +1,133 @@
 from sgplaywright import SgPlaywright
-import json
-import re
+import time
+from bs4 import BeautifulSoup as bs
 from sgscrape.sgrecord_deduper import SgRecordDeduper
 from sgscrape.sgrecord import SgRecord
 from sgscrape.sgwriter import SgWriter
 from sgscrape.sgrecord_id import SgRecordID
 from sgscrape import simple_scraper_pipeline as sp
-from sglogging import sglog
-import time
-
-
-def extract_json(html_string):
-    json_objects = []
-    count = 0
-
-    brace_count = 0
-    for element in html_string:
-
-        if element == "{":
-            brace_count = brace_count + 1
-            if brace_count == 1:
-                start = count
-
-        elif element == "}":
-            brace_count = brace_count - 1
-            if brace_count == 0:
-                end = count
-                try:
-                    json_objects.append(json.loads(html_string[start : end + 1]))
-                except Exception:
-                    pass
-        count = count + 1
-
-    return json_objects
 
 
 def get_data():
-    url = "https://www.newworld.co.nz/BrandsApi/BrandsStore/GetBrandStores"
+    url = "https://7leavescafe.com/locations"
     with SgPlaywright(
-        proxy_country="au",
+        proxy_country="us",
         headless=False,
-
     ).firefox() as driver:
         driver.goto(url)
-        time.sleep(60)
-        response = driver.content()
-    log.info(response)
-    json_objects = extract_json(response)
-    for location in json_objects:
-        locator_domain = "www.newworld.co.nz"
-        page_url = locator_domain + location["url"]
-        location_name = location["name"]
-        latitude = location["latitude"]
-        longitude = location["longitude"]
-        city = location["subRegionName"]
-        address = location["address"].split(",")[0]
-        state = location["regionName"]
-        zipp = location["address"].split(" ")[-1]
-        if bool(re.search(r"\d", zipp)) is False:
-            zipp = "<MISSING>"
-        store_number = location["storeId"].replace("{", "").replace("}", "")
-        phone = "<INACCESSIBLE>"
-        location_type = "<MISSING>"
-        hours = location["openingHours"].replace(";", ", ")
-        country_code = "NZ"
-        if float(latitude) == 0.0:
-            latitude = longitude = "<MISSING>"
-        yield {
-            "locator_domain": locator_domain,
-            "page_url": page_url,
-            "location_name": location_name,
-            "latitude": latitude,
-            "longitude": longitude,
-            "city": city,
-            "street_address": address,
-            "state": state,
-            "zip": zipp,
-            "store_number": store_number,
-            "phone": phone,
-            "location_type": location_type,
-            "hours": hours,
-            "country_code": country_code,
-        }
+        time.sleep(100)
+        response = driver.inner_html("html")
+        soup = bs(response.replace("<br>", "\n"), "html.parser")
+        grids = soup.find_all("div", attrs={"class": "image-box__location"})
+        for grid in grids:
+            locator_domain = "https://7leavescafe.com"
+            page_url = url
+            location_name = grid.find("h4").text.strip()
+            if "coming soon" in location_name.lower():
+                location_name = location_name.split("-")[0].strip()
+                hours = "Coming Soon"
+                phone = "<MISSING>"
+
+            else:
+                days = grid.find("dl").find_all("dt")
+                times = grid.find("dl").find_all("dd")
+
+                hours = ""
+                for x in range(len(days)):
+                    day = days[x].text.strip()
+                    time_bit = times[x].text.strip()
+                    hours = hours + day + " " + time_bit + ", "
+
+                hours = hours[:-2]
+                try:
+                    phone = grid.find("p").text.strip()
+                except Exception:
+                    phone = "<MISSING>"
+            latitude = "<MISSING>"
+            longitude = "<MISSING>"
+            address = (
+                grid.find("address")
+                .text.strip()
+                .split("\n")[0]
+                .replace(",", "")
+                .strip()
+            )
+            try:
+                city = (
+                    grid.find("address")
+                    .text.strip()
+                    .split("\n")[-1]
+                    .split(", ")[0]
+                    .replace(",", "")
+                    .strip()
+                )
+                state = (
+                    grid.find("address")
+                    .text.strip()
+                    .split("\n")[-1]
+                    .split(", ")[1]
+                    .split(" ")[0]
+                    .replace(",", "")
+                    .strip()
+                )
+                zipp = (
+                    grid.find("address")
+                    .text.strip()
+                    .split("\n")[-1]
+                    .split(", ")[1]
+                    .split(" ")[1]
+                    .replace(",", "")
+                    .strip()
+                )
+            except Exception:
+                city = (
+                    "".join(
+                        part + " "
+                        for part in grid.find("address")
+                        .text.strip()
+                        .split("\n")[-1]
+                        .split(" ")[:-2]
+                    )
+                    .strip()
+                    .replace(",", "")
+                    .strip()
+                )
+                state = (
+                    grid.find("address")
+                    .text.strip()
+                    .split("\n")[-1]
+                    .split(" ")[-2]
+                    .replace(",", "")
+                    .strip()
+                )
+                zipp = (
+                    grid.find("address")
+                    .text.strip()
+                    .split("\n")[-1]
+                    .split(" ")[-1]
+                    .replace(",", "")
+                    .strip()
+                )
+            store_number = "<MISSING>"
+            location_type = "<MISSING>"
+            country_code = "US"
+
+            yield {
+                "locator_domain": locator_domain,
+                "page_url": page_url,
+                "location_name": location_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "city": city,
+                "street_address": address,
+                "state": state,
+                "zip": zipp,
+                "store_number": store_number,
+                "phone": phone,
+                "location_type": location_type,
+                "hours": hours,
+                "country_code": country_code,
+            }
 
 
 def scrape():
@@ -129,5 +175,4 @@ def scrape():
 
 
 if __name__ == "__main__":
-    log = sglog.SgLogSetup().get_logger(logger_name="newworld")
     scrape()
