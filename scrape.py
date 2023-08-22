@@ -40,7 +40,7 @@ def get_data():
     with SgPlaywright(
         proxy_country="nz",
         headless=False,
-    ).firefox() as driver:
+    ).chrome() as driver:
         driver.goto(url)
         time.sleep(60)
         response = driver.content()
